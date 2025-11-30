@@ -9,7 +9,7 @@ import { wrapper } from "axios-cookiejar-support";
 import { CookieJar } from "tough-cookie";
 import os from "node:os";
 import { Message, MessageActionRow, MessageButton } from "discord.js-selfbot-v13";
-import { NORMALIZE_REGEX } from "@/typings/constants.js";
+import { NORMALIZE_REGEX, CAPTCHA } from "@/typings/constants.js";
 import { NotificationService } from "./NotificationService.js";
 
 interface CaptchaServiceOptions {
@@ -191,7 +191,7 @@ export class CaptchaService {
     public static async handleCaptcha(params: BaseParams, message: Message, retries: number = 0): Promise<void> {
         const { agent } = params;
         const normalizedContent = message.content.normalize("NFC").replace(NORMALIZE_REGEX, "");
-        const maxRetries = 1;
+        const maxRetries = CAPTCHA.MAX_RETRIES;
 
         const captchaService = new CaptchaService({
             provider: agent.config.captchaAPI,
