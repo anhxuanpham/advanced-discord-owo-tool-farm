@@ -83,7 +83,7 @@ export class YesCaptchaSolver implements CaptchaSolver {
     private async pollTaskResult(taskId: string): Promise<TaskResultResponse> {
         const startTime = Date.now();
         let attempt = 0;
-        let currentDelay = POLLING_CONFIG.INITIAL_DELAY;
+        let currentDelay: number = POLLING_CONFIG.INITIAL_DELAY;
 
         logger.debug(`[YesCaptcha] Starting to poll task ${taskId}`);
 
