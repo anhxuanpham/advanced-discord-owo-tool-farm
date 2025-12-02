@@ -1,0 +1,28 @@
+import { CommandProps, CommandParams } from "@/typings/index.js";
+import fs from 'fs/promises';
+
+export default {
+    name: "report",
+    description: "command.report.description" as any,
+    aliases: ["export-stats", "savereport"],
+    execute: async ({ agent, message, args }: CommandParams) => {
+        const format = (args[0] || 'html').toLowerCase() as 'text' | 'json' | 'html';
+
+        if (!['text', 'json', 'html'].includes(format)) {
+            await message.reply('❌ Invalid format! Use: text, json, or html');
+            return;
+        }
+
+        const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+        const filename = `stats_${timestamp}.${format === 'text' ? 'txt' : format}`;
+
+        try {
+            const report = agent.stats.generateReport(format);
+            await fs.writeFile(filename, report, 'utf-8');
+
+            await message.reply(`✅ Stats report exported to \`${filename}\``);
+        } catch (error) {
+            await message.reply(`❌ Failed to export report: ${error}`);
+        }
+    }
+} satisfies CommandProps;

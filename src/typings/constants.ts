@@ -1,5 +1,12 @@
 export const NORMALIZE_REGEX = /[\p{Cf}\p{Cc}\p{Zl}\p{Zp}\p{Cn}]/gu;
 
+/**
+ * HTTP Headers - Unified across all requests for consistent fingerprinting
+ */
+export const HTTP_HEADERS = {
+    USER_AGENT: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+} as const;
+
 export const COLOR = {
     CRITICAL: "#FF0000",
     NORMAL: "#FFFF00",

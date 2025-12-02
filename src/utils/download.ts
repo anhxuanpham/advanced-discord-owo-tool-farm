@@ -1,5 +1,6 @@
 import AdmZip from "adm-zip";
 import axios from "axios";
+import { HTTP_HEADERS } from "@/typings/constants.js";
 
 /**
  * Downloads an attachment from the specified URL and returns its contents as a Buffer.
@@ -12,7 +13,7 @@ export const downloadAttachment = async (url: string): Promise<Buffer> => {
     const response = await axios.get(url, {
         responseType: "arraybuffer",
         headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3",
+            "User-Agent": HTTP_HEADERS.USER_AGENT,
             "Content-Type": "application/octet-stream",
         },
     });
@@ -31,11 +32,11 @@ export const downloadRepository = async (repoUrl: string): Promise<AdmZip> => {
     const response = await axios.get(repoUrl, {
         responseType: "arraybuffer",
         headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36",
+            "User-Agent": HTTP_HEADERS.USER_AGENT,
             "Accept": "application/vnd.github.v3+json",
         },
     });
-    
+
     return new AdmZip(Buffer.from(response.data));
 };
 
@@ -50,7 +51,7 @@ export const downloadRepository = async (repoUrl: string): Promise<AdmZip> => {
 export const downloadAndExtractRepo = async (repoUrl: string, extractPath: string): Promise<string> => {
     const zip = await downloadRepository(repoUrl);
     zip.extractAllTo(extractPath, true);
-    
+
     // Return the extracted folder name
     const entries = zip.getEntries();
     return entries[0]?.entryName || "";

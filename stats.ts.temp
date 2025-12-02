@@ -1,0 +1,11 @@
+import { CommandProps, CommandParams } from "@/typings/index.js";
+
+export default {
+    name: "stats",
+    description: "command.stats.description" as any,
+    aliases: ["statistics", "st"],
+    execute: async ({ agent, message }: CommandParams) => {
+        const report = agent.stats.generateReport('text');
+        await message.reply('```\n' + report + '\n```');
+    }
+} satisfies CommandProps;

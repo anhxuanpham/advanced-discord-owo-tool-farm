@@ -1,0 +1,25 @@
+--- a/src/services/CaptchaService.ts
++++ b/src/services/CaptchaService.ts
+@@ -273,8 +273,20 @@ export class CaptchaService {
+ 
+             // Retry logic
+             if (retries < maxRetries) {
+-                logger.warn(`Retrying captcha solving after 3 seconds... (${retries + 1}/${maxRetries})`);
+-                await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds before retry
++                // Calculate delay with exponential backoff and jitter
++                const baseDelay = CAPTCHA.BASE_DELAY * Math.pow(CAPTCHA.EXPONENTIAL_BASE, retries);
++                const jitter = baseDelay * CAPTCHA.JITTER_FACTOR * (Math.random() * 2 - 1);
++                const delay = Math.min(
++                    Math.max(baseDelay + jitter, CAPTCHA.BASE_DELAY),
++                    CAPTCHA.MAX_DELAY
++                );
++
++                logger.warn(
++                    `Retrying captcha solving in ${(delay / 1000).toFixed(1)}s... ` +
++                    `(Attempt ${retries + 1}/${maxRetries})`
++                );
++
++                await new Promise(resolve => setTimeout(resolve, delay));
+                 return CaptchaService.handleCaptcha(params, message, retries +  1);
+             }
+ 

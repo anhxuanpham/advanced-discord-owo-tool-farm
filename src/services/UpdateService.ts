@@ -10,12 +10,13 @@ import { execSync, exec, spawn } from "node:child_process";
 import packageJSON from "#/package.json" with { type: "json" };
 import { logger } from "@/utils/logger.js";
 import { t } from "@/utils/locales.js";
+import { HTTP_HEADERS } from "@/typings/constants.js";
 import { copyDirectory } from "../utils/path.js";
 import { downloadAndExtractRepo } from "@/utils/download.js";
 
 export class UpdateFeature {
     private baseHeaders = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537'
+        'User-Agent': HTTP_HEADERS.USER_AGENT
     };
 
     public checkForUpdates = async () => {
