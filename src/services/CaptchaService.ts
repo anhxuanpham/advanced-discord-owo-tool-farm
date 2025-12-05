@@ -94,10 +94,10 @@ export class CaptchaService {
             throw new Error("Captcha solver is not configured.");
         }
 
-        logger.debug(`Starting hCaptcha solving process for: ${location}`);
+        logger.info(`[Captcha] Starting hCaptcha solving process for: ${location}`);
 
         // Step 1: Follow the OAuth redirect chain (this establishes the session)
-        logger.debug("Step 1: Following OAuth redirect chain...");
+        logger.info("[Captcha] Step 1: Following OAuth redirect chain...");
         const oauthResponse = await this.axiosInstance.get(location, {
             headers: {
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
@@ -112,10 +112,10 @@ export class CaptchaService {
             maxRedirects: 10,
             validateStatus: (status) => status < 400 // Accept redirects
         });
-        logger.debug(`OAuth response status: ${oauthResponse.status}`);
+        logger.info(`[Captcha] OAuth response status: ${oauthResponse.status}`);
 
         // Step 2: Visit the captcha page explicitly
-        logger.debug("Step 2: Visiting captcha page...");
+        logger.info("[Captcha] Step 2: Visiting captcha page...");
         try {
             await this.axiosInstance.get("https://owobot.com/captcha", {
                 headers: {
@@ -134,7 +134,7 @@ export class CaptchaService {
         }
 
         // Step 3: Check authentication status
-        logger.debug("Step 3: Checking authentication status...");
+        logger.info("[Captcha] Step 3: Checking authentication status...");
         const accountResponse = await this.axiosInstance.get("https://owobot.com/api/auth", {
             headers: {
                 "Accept": "application/json, text/plain, */*",
@@ -147,7 +147,7 @@ export class CaptchaService {
             }
         });
 
-        logger.debug(`Auth response data: ${JSON.stringify(accountResponse.data, null, 2)}`);
+        logger.info(`[Captcha] Auth status - Banned: ${accountResponse.data?.banned || false}, Captcha Active: ${accountResponse.data?.captcha?.active || false}`);
 
         if (accountResponse.data?.banned) {
             throw new Error("Account is banned.");
@@ -158,12 +158,12 @@ export class CaptchaService {
         }
 
         // Step 4: Solve the hCaptcha
-        logger.debug(`Step 4: Solving hCaptcha with sitekey: ${sitekey} and siteurl: ${siteurl}`);
+        logger.info(`[Captcha] Step 4: Solving hCaptcha with sitekey: ${sitekey}`);
         const solution = await this.solver.solveHcaptcha(sitekey, siteurl);
-        logger.debug(`hCaptcha response token: ${solution.slice(0, 50)}...`);
+        logger.info(`[Captcha] hCaptcha token received (length: ${solution.length})`);
 
         // Step 5: Submit the verification (matching your successful browser request exactly)
-        logger.debug("Step 5: Submitting captcha verification...");
+        logger.info("[Captcha] Step 5: Submitting captcha verification...");
         const verificationResponse = await this.axiosInstance.post("https://owobot.com/api/captcha/verify", {
             token: solution // Using "code" as per your successful browser request
         }, {
@@ -234,14 +234,14 @@ export class CaptchaService {
         try {
             const attachmentUrl = message.attachments.first()?.url;
             if (attachmentUrl) {
-                logger.debug(`Image captcha detected, attempting to solve... (Attempt ${retries + 1}/${maxRetries + 1})`);
+                logger.info(`[Captcha] Image captcha detected, attempting to solve... (Attempt ${retries + 1}/${maxRetries + 1})`);
                 const solution = await captchaService.solveImageCaptcha(attachmentUrl);
 
                 logger.debug(`Attempting reach OwO bot...`);
                 const owo = await agent.client.users.fetch(agent.owoID);
 
                 const dms = await owo.createDM();
-                logger.debug(`DM channel created, sending captcha solution...`);
+                logger.info(`[Captcha] DM channel created, sending solution: ${solution}`);
 
                 const captchaResponse = await agent.awaitResponse({
                     channel: dms,
@@ -261,7 +261,7 @@ export class CaptchaService {
                     && /(https?:\/\/[^\s]+)/g.test(((message.components[0] as MessageActionRow).components[0] as MessageButton).url || "")
                 )
             ) {
-                logger.debug(`Link captcha detected, attempting to solve... (Attempt ${retries + 1}/${maxRetries + 1})`);
+                logger.info(`[Captcha] Link captcha detected, attempting to solve... (Attempt ${retries + 1}/${maxRetries + 1})`);
                 const { location } = await agent.client.authorizeURL("https://discord.com/oauth2/authorize?response_type=code&redirect_uri=https%3A%2F%2Fowobot.com%2Fapi%2Fauth%2Fdiscord%2Fredirect&scope=identify%20guilds%20email%20guilds.members.read&client_id=408785106942164992")
                 await captchaService.solveHcaptcha(location);
             }
