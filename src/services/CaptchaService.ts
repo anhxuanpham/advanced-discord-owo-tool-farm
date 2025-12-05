@@ -56,7 +56,7 @@ export class CaptchaService {
             "Accept-Encoding": "gzip, deflate, br",
             "Accept-Language": "en-US,en;q=0.9",
             "Cache-Control": "no-cache",
-            "Sec-Ch-Ua": `"Not_A Brand";v="8", "Chromium";v="131", "Google Chrome";v="131"`,
+            "Sec-Ch-Ua": `"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"`,
             "Sec-Ch-Ua-Mobile": "?0",
             "Sec-Ch-Ua-Platform": `"${getPlatformForHeader()}"`,
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
@@ -188,10 +188,37 @@ export class CaptchaService {
         logger.info("✅ hCaptcha verification successful!");
     }
 
+    // Singleton lock to prevent parallel captcha solve attempts (prevents YesCaptcha rate limiting)
+    private static solvingInProgress = false;
+    private static lastSolveTime = 0;
+
     public static async handleCaptcha(params: BaseParams, message: Message, retries: number = 0): Promise<void> {
         const { agent } = params;
         const normalizedContent = message.content.normalize("NFC").replace(NORMALIZE_REGEX, "");
         const maxRetries = CAPTCHA.MAX_RETRIES;
+
+        // Check if another instance already solved recently (within 10 seconds)
+        if (Date.now() - CaptchaService.lastSolveTime < 10000) {
+            logger.debug('Captcha was recently solved, skipping this attempt...');
+            return;
+        }
+
+        // Wait if another solve is in progress (max 60 seconds to stay within 10min timeout)
+        if (CaptchaService.solvingInProgress && retries === 0) {
+            logger.debug('Captcha solving already in progress, waiting...');
+            let waitCount = 0;
+            while (CaptchaService.solvingInProgress && waitCount < 60) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                waitCount++;
+            }
+            if (Date.now() - CaptchaService.lastSolveTime < 10000) {
+                logger.debug('Captcha was solved while waiting, skipping...');
+                return;
+            }
+        }
+
+        // Set lock
+        CaptchaService.solvingInProgress = true;
 
         const captchaService = new CaptchaService({
             provider: agent.config.captchaAPI,
@@ -266,19 +293,37 @@ export class CaptchaService {
                     }
                 ]
             });
+
+            // Mark solving complete and record time
+            CaptchaService.solvingInProgress = false;
+            CaptchaService.lastSolveTime = Date.now();
         } catch (error) {
+            const errorMessage = (error as Error).message;
             logger.error(`Failed to solve captcha on attempt ${retries + 1}:`);
             logger.error(error as Error);
 
+            // Detect rate limiting (disguised as key error from YesCaptcha)
+            const isRateLimited = errorMessage.includes('密钥错误') ||
+                errorMessage.includes('屏蔽') ||
+                errorMessage.includes('blocked');
+
             // Retry logic
             if (retries < maxRetries) {
-                // Calculate delay with exponential backoff and jitter
-                const baseDelay = CAPTCHA.BASE_DELAY * Math.pow(CAPTCHA.EXPONENTIAL_BASE, retries);
-                const jitter = baseDelay * CAPTCHA.JITTER_FACTOR * (Math.random() * 2 - 1);
-                const delay = Math.min(
-                    Math.max(baseDelay + jitter, CAPTCHA.BASE_DELAY),
-                    CAPTCHA.MAX_DELAY
-                );
+                let delay: number;
+
+                if (isRateLimited) {
+                    // Rate limited - wait 15-25 seconds (safer for 10min timeout)
+                    delay = 15000 + Math.random() * 10000;
+                    logger.warn(`[YesCaptcha] Rate limit detected, waiting ${(delay / 1000).toFixed(1)}s before retry...`);
+                } else {
+                    // Normal error - use exponential backoff
+                    const baseDelay = CAPTCHA.BASE_DELAY * Math.pow(CAPTCHA.EXPONENTIAL_BASE, retries);
+                    const jitter = baseDelay * CAPTCHA.JITTER_FACTOR * (Math.random() * 2 - 1);
+                    delay = Math.min(
+                        Math.max(baseDelay + jitter, CAPTCHA.BASE_DELAY),
+                        CAPTCHA.MAX_DELAY
+                    );
+                }
 
                 logger.warn(
                     `Retrying captcha solving in ${(delay / 1000).toFixed(1)}s... ` +
@@ -288,6 +333,9 @@ export class CaptchaService {
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return CaptchaService.handleCaptcha(params, message, retries + 1);
             }
+
+            // Release lock on failure
+            CaptchaService.solvingInProgress = false;
 
             // Max retries reached, give up - only notify on complete failure
             logger.alert(`All ${maxRetries + 1} attempts to solve captcha failed, waiting for manual resolution.`);
