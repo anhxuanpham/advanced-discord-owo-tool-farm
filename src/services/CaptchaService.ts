@@ -200,6 +200,8 @@ export class CaptchaService {
         // Check if another instance already solved recently (within 10 seconds)
         if (Date.now() - CaptchaService.lastSolveTime < 10000) {
             logger.debug('Captcha was recently solved, skipping this attempt...');
+            // Reset captchaDetected since the captcha was already handled
+            agent.captchaDetected = false;
             return;
         }
 
@@ -213,6 +215,8 @@ export class CaptchaService {
             }
             if (Date.now() - CaptchaService.lastSolveTime < 10000) {
                 logger.debug('Captcha was solved while waiting, skipping...');
+                // Reset captchaDetected since the captcha was already handled
+                agent.captchaDetected = false;
                 return;
             }
         }
@@ -269,6 +273,11 @@ export class CaptchaService {
             // If we reach here, captcha was solved successfully
             agent.totalCaptchaSolved++;
             logger.info(`Captcha solved successfully on attempt ${retries + 1}!`);
+
+            // Add delay after solving to prevent immediate captcha respawn
+            const postSolveDelay = 15000 + Math.random() * 10000; // 15-25 seconds
+            logger.info(`Waiting ${(postSolveDelay / 1000).toFixed(1)}s before resuming to avoid immediate captcha respawn...`);
+            await new Promise(resolve => setTimeout(resolve, postSolveDelay));
 
             // Only notify on successful resolution
             await notificationService.notify(params, {
