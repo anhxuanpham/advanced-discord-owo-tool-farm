@@ -76,6 +76,10 @@ export const CAPTCHA = {
     MAX_DELAY: 40000,            // Maximum delay (40 seconds)
     JITTER_FACTOR: 0.3,          // ±30% randomization
     EXPONENTIAL_BASE: 2,         // Double delay each retry
+    REPEAT_THRESHOLD: 5 * 60 * 1000,      // 5 minutes - if new captcha within this time, it's suspicious
+    PROGRESS_START_TIME: 3 * 60 * 1000,   // Start progress notifications after 3 min
+    PROGRESS_INTERVAL: 2 * 60 * 1000,     // Send progress notification every 2 min
+    TOTAL_TIMEOUT: 10 * 60 * 1000,        // OwO's 10 minute timeout
 } as const;
 
 /**

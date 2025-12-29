@@ -191,6 +191,8 @@ export class CaptchaService {
     // Singleton lock to prevent parallel captcha solve attempts (prevents YesCaptcha rate limiting)
     private static solvingInProgress = false;
     private static lastSolveTime = 0;
+    private static captchaStartTime = 0;
+    private static lastProgressNotifyTime = 0;
 
     public static async handleCaptcha(params: BaseParams, message: Message, retries: number = 0): Promise<void> {
         const { agent } = params;
@@ -230,9 +232,35 @@ export class CaptchaService {
         });
         const notificationService = new NotificationService();
 
+        // Track start time for progress notifications (only on first attempt)
+        if (retries === 0) {
+            CaptchaService.captchaStartTime = Date.now();
+            CaptchaService.lastProgressNotifyTime = 0;
+        }
+
+        // Check if this is a repeat captcha (within 5 minutes of last solve)
+        const timeSinceLastSolve = Date.now() - CaptchaService.lastSolveTime;
+        const isRepeatCaptcha = CaptchaService.lastSolveTime > 0 && timeSinceLastSolve < CAPTCHA.REPEAT_THRESHOLD;
+
         // Only notify on first attempt
         if (retries === 0) {
             NotificationService.consoleNotify(params);
+
+            // Send warning if this is a repeat captcha
+            if (isRepeatCaptcha) {
+                logger.alert(`⚠️ REPEAT CAPTCHA! New captcha appeared ${Math.floor(timeSinceLastSolve / 1000)}s after last solve!`);
+                await notificationService.notify(params, {
+                    title: "⚠️ REPEAT CAPTCHA",
+                    description: `Status: 🔄 **NEW CAPTCHA** appeared ${Math.floor(timeSinceLastSolve / 1000)}s after last solve!`,
+                    urgency: "critical",
+                    content: `${agent.config.adminID ? `<@${agent.config.adminID}> ` : ""}⚠️ Suspicious! New captcha in channel: <#${message.channel.id}>`,
+                    sourceUrl: message.url,
+                    fields: [
+                        { name: "Time Since Last Solve", value: `${Math.floor(timeSinceLastSolve / 1000)}s`, inline: true },
+                        { name: "Action Required", value: "Monitor closely - may need manual intervention", inline: true },
+                    ]
+                });
+            }
         }
 
         try {
@@ -338,6 +366,30 @@ export class CaptchaService {
                     `Retrying captcha solving in ${(delay / 1000).toFixed(1)}s... ` +
                     `(Attempt ${retries + 1}/${maxRetries})`
                 );
+
+                // Send progress notification if solving takes too long
+                const elapsedTime = Date.now() - CaptchaService.captchaStartTime;
+                const shouldSendProgress = elapsedTime > CAPTCHA.PROGRESS_START_TIME &&
+                    Date.now() - CaptchaService.lastProgressNotifyTime > CAPTCHA.PROGRESS_INTERVAL;
+
+                if (shouldSendProgress) {
+                    CaptchaService.lastProgressNotifyTime = Date.now();
+                    const timeRemaining = Math.floor((CAPTCHA.TOTAL_TIMEOUT - elapsedTime) / 1000);
+                    logger.warn(`⏳ Captcha solving taking long: ${Math.floor(elapsedTime / 60000)}m elapsed, ~${Math.floor(timeRemaining / 60)}m remaining`);
+
+                    await notificationService.notify(params, {
+                        title: "⏳ CAPTCHA STILL TRYING",
+                        description: `Status: 🔄 **IN PROGRESS** (${Math.floor(elapsedTime / 60000)}m elapsed)`,
+                        urgency: "critical",
+                        content: `${agent.config.adminID ? `<@${agent.config.adminID}> ` : ""}Still trying to solve captcha in <#${message.channel.id}>`,
+                        sourceUrl: message.url,
+                        fields: [
+                            { name: "Attempt", value: `${retries + 1}/${maxRetries + 1}`, inline: true },
+                            { name: "Time Remaining", value: `~${Math.floor(timeRemaining / 60)}m ${timeRemaining % 60}s`, inline: true },
+                            { name: "Last Error", value: `\`${errorMessage.slice(0, 100)}\``, inline: false }
+                        ]
+                    });
+                }
 
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return CaptchaService.handleCaptcha(params, message, retries + 1);
