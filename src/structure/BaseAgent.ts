@@ -24,6 +24,7 @@ import { ExtendedClient } from "./core/ExtendedClient.js";
 import { CooldownManager } from "./core/CooldownManager.js";
 import { fileURLToPath } from "node:url";
 import { CriticalEventHandler } from "@/handlers/CriticalEventHandler.js";
+import { SentryService } from "@/services/SentryService.js";
 
 export class BaseAgent {
     public readonly rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -183,7 +184,8 @@ export class BaseAgent {
                         logger.debug(`No response received within the specified time (${this.invalidResponseCount}/${this.invalidResponseThreshold}).`);
                     }
                     if (this.invalidResponseCount >= this.invalidResponseThreshold) {
-                        reject(new Error("Invalid response count exceeded threshold."));
+                        this.invalidResponseCount = 0; // Reset to allow recovery
+                        return reject(new Error("Invalid response count exceeded threshold."));
                     }
                     resolve(undefined);
                 } else {
@@ -292,7 +294,7 @@ export class BaseAgent {
             for (const featureKey of shuffleArray(featureKeys)) {
                 if (this.captchaDetected) {
                     logger.debug("Captcha detected, skipping feature execution.");
-                    return;
+                    break;  // Use break instead of return to allow farmLoop to continue scheduling
                 }
 
                 const botStatus = await this.isBotOnline();
@@ -322,15 +324,35 @@ export class BaseAgent {
 
                     await this.client.sleep(ranInt(500, 4600));
                 } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+
+                    // Handle threshold exceeded - try to recover by changing channel
+                    if (errorMessage.includes("Invalid response count exceeded threshold")) {
+                        logger.warn(t("agent.messages.responseThresholdExceeded"));
+                        logger.info(t("agent.messages.attemptingChannelChange"));
+                        this.setActiveChannel();
+                        continue; // Skip to next feature instead of crashing
+                    }
+
+                    // Handle abort errors gracefully (network timeouts, etc.)
+                    if (errorMessage.includes("aborted") || errorMessage.includes("AbortError")) {
+                        logger.warn(`Operation aborted in feature ${feature.name}, continuing...`);
+                        continue;
+                    }
+
                     logger.error(`Error running feature ${feature.name}:`);
                     logger.error(error as Error);
                 }
             }
 
-            if (!this.captchaDetected && !this.farmLoopPaused) {
+            // Always schedule next iteration unless paused
+            // Even if captcha is detected, we need to keep the loop running
+            // so it can resume after captcha is solved
+            if (!this.farmLoopPaused) {
+                const delay = this.captchaDetected ? 5000 : ranInt(1000, 7500);
                 setTimeout(() => {
                     this.farmLoop();
-                }, ranInt(1000, 7500));
+                }, delay);
             }
 
         } catch (error) {
@@ -379,6 +401,13 @@ export class BaseAgent {
 
         const agent = new BaseAgent(client, config);
         agent.setActiveChannel();
+
+        // Set Sentry context for better error tracking
+        SentryService.setUser(client.user.id, client.user.username);
+        SentryService.setTags({
+            guild: config.guildID,
+            captchaAPI: config.captchaAPI || "none",
+        });
 
         await agent.registerEvents();
         logger.debug("BaseAgent initialized successfully.");

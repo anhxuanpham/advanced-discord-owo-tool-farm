@@ -67,7 +67,9 @@
             "featureNotFound": "Özellik {featureKey} özellik koleksiyonunda bulunamadı.",
             "featuresRegistered": "{count} özellik kaydedildi.",
             "commandsRegistered": "{count} komut kaydedildi.",
-            "loggedIn": "Şu kullanıcı olarak giriş yapıldı: {username}"
+            "loggedIn": "Şu kullanıcı olarak giriş yapıldı: {username}",
+            "responseThresholdExceeded": "Yanıt eşiği aşıldı. OwO bot yanıt vermiyor olabilir veya ağ sorunları olabilir.",
+            "attemptingChannelChange": "Kurtarmak için kanal değiştirilmeye çalışılıyor..."
         }
     },
     "system": {

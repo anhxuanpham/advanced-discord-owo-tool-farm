@@ -39,6 +39,7 @@
   "dependencies": {
     "@inquirer/core": "^10.1.14",
     "@inquirer/prompts": "^7.6.0",
+    "@sentry/node": "^10.32.1",
     "2captcha": "^3.0.5-2",
     "adm-zip": "^0.5.16",
     "axios": "^1.10.0",

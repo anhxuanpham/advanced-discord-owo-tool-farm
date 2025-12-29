@@ -67,7 +67,9 @@
             "featureNotFound": "Feature {featureKey} not found in features collection.",
             "featuresRegistered": "Registered {count} features.",
             "commandsRegistered": "Registered {count} commands.",
-            "loggedIn": "Logged in as: {username}"
+            "loggedIn": "Logged in as: {username}",
+            "responseThresholdExceeded": "Response threshold exceeded. OwO bot may be unresponsive or there may be network issues.",
+            "attemptingChannelChange": "Attempting to change channel to recover..."
         }
     },
     "system": {

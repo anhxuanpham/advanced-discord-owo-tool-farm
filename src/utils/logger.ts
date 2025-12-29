@@ -5,6 +5,7 @@ import fs from "node:fs"
 import path from "node:path"
 import util from "node:util"
 import { t } from "./locales.js"
+import { SentryService } from "@/services/SentryService.js"
 
 export type LogLevel = "alert" | "error" | "runtime" | "warn" | "info" | "data" | "sent" | "debug";
 
@@ -110,6 +111,27 @@ class WinstonLogger {
     }
 
     public log(level: LogLevel, message: string | Error) {
+        // Add breadcrumb to Sentry for all log levels
+        if (SentryService.isEnabled()) {
+            const messageStr = message instanceof Error ? message.message : message;
+
+            // Map log levels to Sentry severity
+            const sentryLevel = level === "error" || level === "alert" ? "error"
+                : level === "warn" ? "warning"
+                    : level === "debug" ? "debug"
+                        : "info";
+
+            SentryService.addBreadcrumb(messageStr, "logger", sentryLevel);
+
+            // Capture errors and alerts to Sentry
+            if ((level === "error" || level === "alert") && message instanceof Error) {
+                SentryService.captureException(message);
+            } else if (level === "alert") {
+                // Also capture alert messages as warnings in Sentry
+                SentryService.captureMessage(messageStr, "warning");
+            }
+        }
+
         if (message instanceof Error) {
             this.logger.log(level, message.message, { stack: message.stack });
         } else {

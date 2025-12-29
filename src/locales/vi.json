@@ -67,7 +67,9 @@
             "featureNotFound": "Tính năng {featureKey} không tìm thấy trong bộ sưu tập tính năng.",
             "featuresRegistered": "Đã đăng ký {count} tính năng.",
             "commandsRegistered": "Đã đăng ký {count} lệnh.",
-            "loggedIn": "Đã đăng nhập với tên: {username}"
+            "loggedIn": "Đã đăng nhập với tên: {username}",
+            "responseThresholdExceeded": "Đã vượt quá ngưỡng phản hồi. OwO bot có thể không phản hồi hoặc có vấn đề mạng.",
+            "attemptingChannelChange": "Đang cố gắng thay đổi kênh để khôi phục..."
         }
     },
     "system": {

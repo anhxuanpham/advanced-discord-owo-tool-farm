@@ -8,6 +8,10 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import packageJSON from "./package.json" with { type: "json" };
 import { Locale } from "@/utils/locales.js";
+import { SentryService } from "@/services/SentryService.js";
+
+// Initialize Sentry as early as possible for error tracking
+SentryService.init("https://1587723679cbc7f73e0ab4231f3a666c@o4510616815140864.ingest.us.sentry.io/4510616837619712");
 
 process.title = `Advanced Discord OwO Tool Farm v${packageJSON.version} - Copyright 2025 © Elysia x Kyou Izumi`;
 console.clear();
