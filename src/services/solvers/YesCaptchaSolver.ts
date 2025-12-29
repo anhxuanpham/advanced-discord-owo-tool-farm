@@ -47,11 +47,12 @@ type TaskResultResponse = {
 
 // --- Configuration ---
 const POLLING_CONFIG = {
-    INITIAL_DELAY: 3000,        // First poll after 3s
-    MAX_DELAY: 10000,           // Max 10s between polls
-    BACKOFF_FACTOR: 1.2,        // Increase delay by 20% each time
-    MAX_ATTEMPTS: 40,           // Max 40 attempts (~2 minutes)
-    TIMEOUT_MS: 120000,         // 2 minutes total timeout
+    INITIAL_DELAY: 5000,        // First poll after 5s (hCaptcha needs time to process)
+    MAX_DELAY: 15000,           // Max 15s between polls
+    BACKOFF_FACTOR: 1.12,       // Increase delay by 12% each time (slower backoff)
+    MAX_ATTEMPTS: 80,           // Max 80 attempts (~8 minutes with backoff)
+    TIMEOUT_MS: 480000,         // 8 minutes total timeout (OwO allows 10 min, keep 2 min margin)
+    SERVER_TIMEOUT_RETRY: 5,    // Retry 5 times if YesCaptcha server times out
 } as const;
 
 // --- Helper Function ---
@@ -80,7 +81,7 @@ export class YesCaptchaSolver implements CaptchaSolver {
         });
     }
 
-    private async pollTaskResult(taskId: string): Promise<TaskResultResponse> {
+    private async pollTaskResult(taskId: string): Promise<TaskResultResponse | null> {
         const startTime = Date.now();
         let attempt = 0;
         let currentDelay: number = POLLING_CONFIG.INITIAL_DELAY;
@@ -112,9 +113,16 @@ export class YesCaptchaSolver implements CaptchaSolver {
                 );
 
                 if (response.data.errorId !== 0) {
-                    throw new Error(
-                        `[YesCaptcha] Task error: ${response.data.errorDescription || 'Unknown error'}`
-                    );
+                    const errorDesc = response.data.errorDescription || 'Unknown error';
+
+                    // Check for YesCaptcha server timeout (Chinese: "任务已超时" = "Task timed out")
+                    // This means YesCaptcha's worker failed, we should create a new task
+                    if (errorDesc.includes('任务已超时') || errorDesc.includes('Task timed out') || errorDesc.includes('timeout')) {
+                        logger.warn(`[YesCaptcha] Server-side timeout detected for task ${taskId}, will retry with new task`);
+                        return null; // Signal to caller to create a new task
+                    }
+
+                    throw new Error(`[YesCaptcha] Task error: ${errorDesc}`);
                 }
 
                 if (response.data.status === "ready") {
@@ -136,6 +144,16 @@ export class YesCaptchaSolver implements CaptchaSolver {
                 logger.warn(
                     `[YesCaptcha] Poll attempt ${attempt} failed: ${error instanceof Error ? error.message : String(error)}`
                 );
+
+                // If this is a YesCaptcha server timeout, return null to trigger new task creation
+                if (error instanceof Error && (
+                    error.message.includes('任务已超时') ||
+                    error.message.includes('Task timed out') ||
+                    error.message.includes('timeout')
+                )) {
+                    logger.warn(`[YesCaptcha] Server-side timeout detected, will retry with new task`);
+                    return null;
+                }
 
                 // If this is a critical error (not just network timeout), throw immediately
                 if (error instanceof Error && error.message.includes('Task error')) {
@@ -186,30 +204,53 @@ export class YesCaptchaSolver implements CaptchaSolver {
     public async solveHcaptcha(sitekey: string, siteurl: string): Promise<string> {
         logger.debug(`[YesCaptcha] Starting hCaptcha solve for ${siteurl}`);
 
-        try {
-            const { data: createTaskData } = await this.createTask({
-                type: "HCaptchaTaskProxyless",
-                websiteKey: sitekey,
-                websiteURL: siteurl,
-            });
+        let serverTimeoutRetries = 0;
+        const maxServerRetries = POLLING_CONFIG.SERVER_TIMEOUT_RETRY;
 
-            if (createTaskData.errorId !== 0) {
-                throw new Error(`[YesCaptcha] HCaptcha task creation failed: ${createTaskData.errorDescription}`);
+        while (serverTimeoutRetries < maxServerRetries) {
+            try {
+                const { data: createTaskData } = await this.createTask({
+                    type: "HCaptchaTaskProxyless",
+                    websiteKey: sitekey,
+                    websiteURL: siteurl,
+                });
+
+                if (createTaskData.errorId !== 0) {
+                    throw new Error(`[YesCaptcha] HCaptcha task creation failed: ${createTaskData.errorDescription}`);
+                }
+
+                logger.debug(`[YesCaptcha] Task created: ${createTaskData.taskId}`);
+
+                const resultData = await this.pollTaskResult(createTaskData.taskId);
+
+                // If pollTaskResult returns null, it means YesCaptcha server timed out
+                // We should create a new task and try again
+                if (resultData === null) {
+                    serverTimeoutRetries++;
+                    logger.warn(
+                        `[YesCaptcha] Server timeout, creating new task... ` +
+                        `(Retry ${serverTimeoutRetries}/${maxServerRetries})`
+                    );
+
+                    // Small delay before creating new task to avoid hammering the API
+                    await delay(2000);
+                    continue;
+                }
+
+                if (resultData.errorId !== 0 || !resultData.solution) {
+                    throw new Error(`[YesCaptcha] HCaptcha solution failed: ${resultData.errorDescription}`);
+                }
+
+                logger.info('[YesCaptcha] hCaptcha solved successfully');
+                return resultData.solution.gRecaptchaResponse;
+            } catch (error) {
+                logger.error(`[YesCaptcha] hCaptcha solve failed: ${error instanceof Error ? error.message : String(error)}`);
+                throw error;
             }
-
-            logger.debug(`[YesCaptcha] Task created: ${createTaskData.taskId}`);
-
-            const resultData = await this.pollTaskResult(createTaskData.taskId);
-
-            if (resultData.errorId !== 0 || !resultData.solution) {
-                throw new Error(`[YesCaptcha] HCaptcha solution failed: ${resultData.errorDescription}`);
-            }
-
-            logger.info('[YesCaptcha] hCaptcha solved successfully');
-            return resultData.solution.gRecaptchaResponse;
-        } catch (error) {
-            logger.error(`[YesCaptcha] hCaptcha solve failed: ${error instanceof Error ? error.message : String(error)}`);
-            throw error;
         }
+
+        throw new Error(
+            `[YesCaptcha] hCaptcha solve failed after ${maxServerRetries} server timeout retries`
+        );
     }
 }
