@@ -217,12 +217,16 @@ export class ConfigPrompter extends BasePrompter {
                     value: undefined
                 },
                 {
-                    name: `2Captcha [${chalk.underline("https://2captcha.com")}]`,
-                    value: "2captcha"
-                },
-                {
                     name: `YesCaptcha [${chalk.underline("https://yescaptcha.com")}]`,
                     value: "yescaptcha",
+                },
+                {
+                    name: `2Crawler [${chalk.underline("https://tools.2crawler.rest")}]`,
+                    value: "2crawler"
+                },
+                {
+                    name: `2Captcha [${chalk.underline("https://2captcha.com")}]`,
+                    value: "2captcha"
                 },
                 {
                     name: t("ui.captchaAPI.adotfAPI"),
@@ -237,6 +241,37 @@ export class ConfigPrompter extends BasePrompter {
     public getCaptchaAPIKey = (cache?: string) =>
         this.ask(input, {
             message: t("ui.captchaAPIKey.enterKey"),
+            required: true,
+            default: cache,
+        });
+
+    public getBackupCaptchaAPI = (cache?: string) =>
+        this.ask(select<Configuration["captchaAPI"]>, {
+            message: "Select backup captcha provider (for failover):",
+            choices: [
+                {
+                    name: "Skip (no backup)",
+                    value: undefined
+                },
+                {
+                    name: `2Crawler [${chalk.underline("https://tools.2crawler.rest")}]`,
+                    value: "2crawler"
+                },
+                {
+                    name: `YesCaptcha [${chalk.underline("https://yescaptcha.com")}]`,
+                    value: "yescaptcha",
+                },
+                {
+                    name: `2Captcha [${chalk.underline("https://2captcha.com")}]`,
+                    value: "2captcha"
+                },
+            ],
+            default: cache
+        });
+
+    public getBackupCaptchaAPIKey = (cache?: string) =>
+        this.ask(input, {
+            message: "Enter backup captcha API key:",
             required: true,
             default: cache,
         });

@@ -42,6 +42,12 @@ export class InquirerUI {
         this.config.captchaAPI = await this.configPrompter.getCaptchaAPI(this.config.captchaAPI);
         if (this.config.captchaAPI) {
             this.config.apiKey = await this.configPrompter.getCaptchaAPIKey(this.config.apiKey);
+
+            // Ask for backup provider for failover
+            this.config.backupCaptchaAPI = await this.configPrompter.getBackupCaptchaAPI(this.config.backupCaptchaAPI);
+            if (this.config.backupCaptchaAPI) {
+                this.config.backupApiKey = await this.configPrompter.getBackupCaptchaAPIKey(this.config.backupApiKey);
+            }
         }
 
         this.config.prefix = await this.configPrompter.getPrefix(this.config.prefix);
