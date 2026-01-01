@@ -2,6 +2,8 @@ import { Configuration } from "@/schemas/ConfigSchema.js";
 import { BaseParams, CaptchaSolver } from "@/typings/index.js";
 import { TwoCaptchaSolver } from "@/services/solvers/TwoCaptchaSolver.js";
 import { YesCaptchaSolver } from "@/services/solvers/YesCaptchaSolver.js";
+import { TwoCrawlerSolver } from "@/services/solvers/TwoCrawlerSolver.js";
+import { FailoverCaptchaSolver } from "@/services/solvers/FailoverCaptchaSolver.js";
 import { downloadAttachment } from "@/utils/download.js";
 import { logger } from "@/utils/logger.js";
 import axios from "axios";
@@ -15,6 +17,8 @@ import { NotificationService } from "./NotificationService.js";
 interface CaptchaServiceOptions {
     provider?: Configuration["captchaAPI"];
     apiKey?: string;
+    backupProvider?: Configuration["backupCaptchaAPI"];
+    backupApiKey?: string;
 }
 
 /**
@@ -34,16 +38,49 @@ const getPlatformForHeader = (): string => {
     }
 };
 
-const createSolver = (provider: Configuration["captchaAPI"], apiKey: string): CaptchaSolver | undefined => {
+const createSingleSolver = (provider: Configuration["captchaAPI"], apiKey: string): CaptchaSolver | undefined => {
     switch (provider) {
         case "yescaptcha":
             return new YesCaptchaSolver(apiKey);
         case "2captcha":
             return new TwoCaptchaSolver(apiKey);
+        case "2crawler":
+            return new TwoCrawlerSolver(apiKey);
         default:
             logger.error(`Unknown captcha provider: ${provider}`);
             return undefined;
     }
+}
+
+/**
+ * Creates a solver with optional failover support
+ */
+const createSolver = (options: CaptchaServiceOptions): CaptchaSolver | undefined => {
+    const { provider, apiKey, backupProvider, backupApiKey } = options;
+
+    if (!provider || !apiKey) {
+        return undefined;
+    }
+
+    const primarySolver = createSingleSolver(provider, apiKey);
+    if (!primarySolver) {
+        return undefined;
+    }
+
+    // If backup provider is configured, create failover solver
+    if (backupProvider && backupApiKey) {
+        const backupSolver = createSingleSolver(backupProvider, backupApiKey);
+        if (backupSolver) {
+            logger.info(`[CaptchaService] Failover enabled: ${provider} → ${backupProvider}`);
+            return new FailoverCaptchaSolver([
+                { name: provider, solver: primarySolver },
+                { name: backupProvider, solver: backupSolver },
+            ]);
+        }
+    }
+
+    // No backup, use primary only
+    return primarySolver;
 }
 
 export class CaptchaService {
@@ -63,9 +100,10 @@ export class CaptchaService {
         }
     }))
 
-    constructor({ provider, apiKey }: CaptchaServiceOptions) {
+    constructor(options: CaptchaServiceOptions) {
+        const { provider, apiKey } = options;
         if (provider && apiKey) {
-            this.solver = createSolver(provider, apiKey);
+            this.solver = createSolver(options);
         } else {
             logger.warn("Captcha API or API key not configured. Captcha handling will be disabled.");
         }
@@ -229,6 +267,8 @@ export class CaptchaService {
         const captchaService = new CaptchaService({
             provider: agent.config.captchaAPI,
             apiKey: agent.config.apiKey,
+            backupProvider: agent.config.backupCaptchaAPI,
+            backupApiKey: agent.config.backupApiKey,
         });
         const notificationService = new NotificationService();
 

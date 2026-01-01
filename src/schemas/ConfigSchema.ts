@@ -20,8 +20,10 @@ export const ConfigSchema = z.object({
     adminID: z.string().optional(),
     musicPath: z.string().optional(),
     prefix: z.string().optional(),
-    captchaAPI: z.enum(["2captcha", "yescaptcha"]).optional(),
+    captchaAPI: z.enum(["2captcha", "yescaptcha", "2crawler"]).optional(),
     apiKey: z.string().optional(),
+    backupCaptchaAPI: z.enum(["2captcha", "yescaptcha", "2crawler"]).optional(),
+    backupApiKey: z.string().optional(),
     autoHuntbot: z.boolean().default(true),
     autoTrait: z.enum([
         "efficiency",
