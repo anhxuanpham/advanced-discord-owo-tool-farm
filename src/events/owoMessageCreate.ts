@@ -32,12 +32,13 @@ export default Schematic.registerEvent({
             return CaptchaService.handleCaptcha({ agent, t, locale }, message);
         }
 
-        // 2. Check for Captcha Success
+        // 2. Check for Captcha Success (just log, CaptchaService handles the actual resume with delay)
         if (/verified that you are.{1,3}human!/igm.test(normalizedContent)) {
             logger.info(`CAPTCHA HAS BEEN RESOLVED, ${agent.config.autoResume ? "RESTARTING SELFBOT" : "STOPPING SELFBOT"}...`)
             if (!agent.config.autoResume) process.exit(0)
+            // Note: Don't call farmLoop() here - let CaptchaService.handleCaptcha() finish its delay first
+            // The delay and resume is handled in CaptchaService after solving
             agent.captchaDetected = false
-            agent.farmLoop()
         }
 
         // 3. Check for Ban

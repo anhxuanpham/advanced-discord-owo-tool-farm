@@ -374,6 +374,12 @@ export class CaptchaService {
             // Mark solving complete and record time
             CaptchaService.solvingInProgress = false;
             CaptchaService.lastSolveTime = Date.now();
+
+            // Reset captcha flag and resume farming AFTER the delay
+            agent.captchaDetected = false;
+            if (agent.config.autoResume) {
+                agent.farmLoop();
+            }
         } catch (error) {
             const errorMessage = (error as Error).message;
             logger.error(`Failed to solve captcha on attempt ${retries + 1}:`);
