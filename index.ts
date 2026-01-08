@@ -9,6 +9,7 @@ import { hideBin } from "yargs/helpers";
 import packageJSON from "./package.json" with { type: "json" };
 import { Locale } from "@/utils/locales.js";
 import { SentryService } from "@/services/SentryService.js";
+import { ConfigManager } from "@/structure/core/ConfigManager.js";
 
 // Initialize Sentry as early as possible for error tracking
 SentryService.init("https://1587723679cbc7f73e0ab4231f3a666c@o4510616815140864.ingest.us.sentry.io/4510616837619712");
@@ -44,6 +45,16 @@ const argv = await yargs(hideBin(process.argv))
         choices: ["en", "tr", "vi"],
         default: "en",
     })
+    .option("auto", {
+        alias: "a",
+        type: "boolean",
+        description: "Auto-start with first saved account (skip CLI prompts)",
+        default: false,
+    })
+    .option("account", {
+        type: "string",
+        description: "Account ID to auto-start with (use with --auto)",
+    })
     .help()
     .epilogue(`For more information, visit ${packageJSON.homepage}`)
     .parse();
@@ -52,20 +63,52 @@ logger.setLevel(argv.verbose || process.env.NODE_ENV === "development" ? "debug"
 process.env.LOCALE = argv.language as Locale || "en";
 
 if (!argv._.length) {
-    if (!argv.skipCheckUpdate) {
-        const updateAvailable = await updateFeature.checkForUpdates();
-        if (updateAvailable) {
-            const shouldUpdate = await confirm({
-                message: "An update is available. Do you want to update now?",
-                default: true,
-            });
-            if (shouldUpdate) {
-                await updateFeature.performUpdate();
-            }
-        }
-        await client.sleep(1000); // Wait for update to complete
-    }
+    // Auto-start mode for Docker/headless environments
+    if (argv.auto) {
+        const configManager = new ConfigManager();
+        const allKeys = configManager.getAllKeys();
 
-    const { config } = await InquirerUI.prompt(client);
-    await BaseAgent.initialize(client, config);
+        if (allKeys.length === 0) {
+            logger.error("No saved accounts found. Please run without --auto first to set up an account.");
+            process.exit(1);
+        }
+
+        // Use specified account or first available
+        const accountId = argv.account || allKeys[0];
+        const config = configManager.get(accountId);
+
+        if (!config) {
+            logger.error(`Account ${accountId} not found. Available accounts: ${allKeys.join(", ")}`);
+            process.exit(1);
+        }
+
+        logger.info(`[Auto-Start] Loading account: ${config.username || accountId}`);
+
+        try {
+            await client.checkAccount(config.token);
+            await BaseAgent.initialize(client, config);
+        } catch (error) {
+            logger.error(`Failed to auto-start: ${error}`);
+            process.exit(1);
+        }
+    } else {
+        // Normal interactive mode
+        if (!argv.skipCheckUpdate) {
+            const updateAvailable = await updateFeature.checkForUpdates();
+            if (updateAvailable) {
+                const shouldUpdate = await confirm({
+                    message: "An update is available. Do you want to update now?",
+                    default: true,
+                });
+                if (shouldUpdate) {
+                    await updateFeature.performUpdate();
+                }
+            }
+            await client.sleep(1000); // Wait for update to complete
+        }
+
+        const { config } = await InquirerUI.prompt(client);
+        await BaseAgent.initialize(client, config);
+    }
 }
+

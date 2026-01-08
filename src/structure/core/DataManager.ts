@@ -26,11 +26,26 @@ import { t } from "@/utils/locales.js";
  *
  * @public
  */
+// Get data directory path - use /app/data in Docker, ./data locally
+const getDefaultDataPath = (): string => {
+    // Check if running in Docker (common indicators)
+    const isDocker = process.env.NODE_ENV === 'production' ||
+        fs.existsSync('/.dockerenv') ||
+        fs.existsSync('/app/data');
+
+    if (isDocker) {
+        return path.join('/app', 'data', 'data.json');
+    }
+
+    // Local development - use ./data relative to project root
+    return path.join(process.cwd(), 'data', 'data.json');
+};
+
 export class DataManager {
     private readonly filePath: string;
 
     constructor(
-        filePath = path.join(os.homedir(), "b2ki-ados", "data.json") // Default path to user's home directory
+        filePath = getDefaultDataPath()
     ) {
         this.filePath = filePath;
         this.ensureFileExists();

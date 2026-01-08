@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  owo-farm:
+    build: .
+    container_name: owo-farm-bot
+    restart: unless-stopped
+    volumes:
+      # Config file (read-only)
+      - ./config.json:/app/config.json:ro
+      # Logs persist across rebuilds
+      - ./logs:/app/logs
+      # Data persist across rebuilds (new path)
+      - ./data:/app/data
+      # Data persist (old path - for backward compatibility)
+      - ./data:/root/b2ki-ados
+    environment:
+      - NODE_ENV=production
+      - TZ=Asia/Ho_Chi_Minh
+    stdin_open: true
+    tty: true
