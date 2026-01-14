@@ -9,7 +9,7 @@ export class FailoverCaptchaSolver implements CaptchaSolver {
     private solvers: { name: string; solver: CaptchaSolver }[];
     private currentIndex: number = 0;
     private failureCount: Map<string, number> = new Map();
-    private maxFailuresBeforeSwitch: number = 2;
+    private maxFailuresBeforeSwitch: number = 1; // Switch immediately after first failure for faster failover
 
     constructor(solvers: { name: string; solver: CaptchaSolver }[]) {
         if (solvers.length === 0) {
