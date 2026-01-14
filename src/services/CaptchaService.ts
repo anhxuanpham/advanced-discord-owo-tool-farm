@@ -191,8 +191,10 @@ export class CaptchaService {
             throw new Error("Account is banned.");
         }
 
+        // If captcha is not active, it was already solved (manually or by another process)
         if (!accountResponse.data?.captcha?.active) {
-            throw new Error("Captcha is not active.");
+            logger.info("[Captcha] Captcha is no longer active - already solved!");
+            return; // Success - captcha was resolved
         }
 
         // Step 4: Solve the hCaptcha
