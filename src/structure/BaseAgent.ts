@@ -29,7 +29,7 @@ import { SentryService } from "@/services/SentryService.js";
 export class BaseAgent {
     public readonly rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-    public readonly miraiID = "1205422490969579530"
+    public readonly miraiID = "1461010634467577856"
 
     public readonly client: ExtendedClient<true>;
     public config: Configuration;
