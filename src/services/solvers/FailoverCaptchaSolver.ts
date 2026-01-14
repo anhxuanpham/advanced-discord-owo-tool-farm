@@ -106,44 +106,66 @@ export class FailoverCaptchaSolver implements CaptchaSolver {
     }
 
     /**
-     * Solve hCaptcha with failover - keeps trying until success or all providers exhausted
+     * Solve hCaptcha with failover - keeps trying until success or hard timeout
+     * Hard timeout ensures we don't exceed OwO's 10-minute deadline
      */
     public async solveHcaptcha(sitekey: string, siteurl: string): Promise<string> {
-        const startSolverIndex = this.currentIndex;
+        const startTime = Date.now();
+        const HARD_TIMEOUT_MS = 9 * 60 * 1000; // 9 minutes hard limit (OwO allows 10 min)
+        const RETRY_DELAY_MS = 30000; // 30 seconds between rounds
+
         let lastError: Error | null = null;
-        let attempts = 0;
-        const maxAttempts = this.solvers.length * 3; // Try each solver up to 3 times before giving up completely
+        let totalAttempts = 0;
 
-        while (attempts < maxAttempts) {
-            const { name, solver } = this.getCurrentSolver();
-            attempts++;
+        while (Date.now() - startTime < HARD_TIMEOUT_MS) {
+            const startSolverIndex = this.currentIndex;
+            let roundAttempts = 0;
+            const maxRoundAttempts = this.solvers.length * 2; // Each round tries each solver twice
 
-            try {
-                logger.info(`[FailoverSolver] Trying ${name} for hCaptcha (attempt ${attempts}/${maxAttempts})`);
-                const result = await solver.solveHcaptcha(sitekey, siteurl);
-                this.recordSuccess(name);
-                logger.info(`[FailoverSolver] ${name} succeeded!`);
-                return result;
-            } catch (error) {
-                lastError = error instanceof Error ? error : new Error(String(error));
-                logger.warn(`[FailoverSolver] ${name} failed: ${lastError.message}`);
-
-                const shouldSwitch = this.recordFailure(name);
-                if (shouldSwitch) {
-                    this.switchToNextSolver();
-
-                    // Log when we've tried all providers once
-                    if (this.currentIndex === startSolverIndex) {
-                        logger.warn(`[FailoverSolver] All providers failed once, retrying from ${this.getCurrentSolver().name}...`);
-                    }
+            while (roundAttempts < maxRoundAttempts) {
+                // Check hard timeout
+                if (Date.now() - startTime >= HARD_TIMEOUT_MS) {
+                    break;
                 }
 
-                // Small delay before trying next provider
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                const { name, solver } = this.getCurrentSolver();
+                roundAttempts++;
+                totalAttempts++;
+
+                try {
+                    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                    logger.info(`[FailoverSolver] Trying ${name} for hCaptcha (attempt ${totalAttempts}, ${elapsed}s elapsed)`);
+                    const result = await solver.solveHcaptcha(sitekey, siteurl);
+                    this.recordSuccess(name);
+                    logger.info(`[FailoverSolver] ${name} succeeded!`);
+                    return result;
+                } catch (error) {
+                    lastError = error instanceof Error ? error : new Error(String(error));
+                    logger.warn(`[FailoverSolver] ${name} failed: ${lastError.message}`);
+
+                    const shouldSwitch = this.recordFailure(name);
+                    if (shouldSwitch) {
+                        this.switchToNextSolver();
+
+                        if (this.currentIndex === startSolverIndex) {
+                            logger.warn(`[FailoverSolver] All providers failed once, will retry...`);
+                        }
+                    }
+
+                    // Small delay before trying next provider
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+            }
+
+            // All providers exhausted in this round, wait and retry if time permits
+            const remainingTime = HARD_TIMEOUT_MS - (Date.now() - startTime);
+            if (remainingTime > RETRY_DELAY_MS) {
+                logger.warn(`[FailoverSolver] All providers exhausted, waiting 30s before retry (${Math.floor(remainingTime / 1000)}s remaining)`);
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
             }
         }
 
-        throw new Error(`[FailoverSolver] All providers exhausted after ${attempts} attempts. Last error: ${lastError?.message}`);
+        throw new Error(`[FailoverSolver] Hard timeout reached after ${totalAttempts} attempts. Last error: ${lastError?.message}`);
     }
 
     /**

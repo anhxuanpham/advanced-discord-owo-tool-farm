@@ -345,8 +345,11 @@ export class CaptchaService {
             logger.info(`Captcha solved successfully on attempt ${retries + 1}!`);
 
             // Add delay after solving to prevent immediate captcha respawn
-            const postSolveDelay = 15000 + Math.random() * 10000; // 15-25 seconds
-            logger.info(`Waiting ${(postSolveDelay / 1000).toFixed(1)}s before resuming to avoid immediate captcha respawn...`);
+            // Longer delay if this was a repeat captcha
+            const postSolveDelay = isRepeatCaptcha
+                ? 30000 + Math.random() * 30000  // 30-60 seconds after repeat captcha
+                : 15000 + Math.random() * 10000; // 15-25 seconds normal
+            logger.info(`Waiting ${(postSolveDelay / 1000).toFixed(1)}s before resuming${isRepeatCaptcha ? ' (extended delay - repeat captcha)' : ''}...`);
             await new Promise(resolve => setTimeout(resolve, postSolveDelay));
 
             // Only notify on successful resolution

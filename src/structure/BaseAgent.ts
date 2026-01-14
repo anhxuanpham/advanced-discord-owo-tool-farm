@@ -356,6 +356,26 @@ export class BaseAgent {
             }
 
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+
+            // Network failure detection - auto-recovery
+            if (errorMessage.includes("fetch failed") ||
+                errorMessage.includes("ECONNRESET") ||
+                errorMessage.includes("ETIMEDOUT") ||
+                errorMessage.includes("network") ||
+                errorMessage.includes("socket")) {
+                logger.alert("[Network] Connection failure detected, auto-recovering in 30s...");
+
+                // Wait 30 seconds then restart farm loop
+                setTimeout(() => {
+                    logger.info("[Network] Attempting to resume farming after network recovery...");
+                    this.farmLoopRunning = false;
+                    this.farmLoop();
+                }, 30000);
+
+                return; // Exit current loop, will restart after timeout
+            }
+
             logger.error("Error occurred during farm loop execution:");
             logger.error(error as Error);
         } finally {
