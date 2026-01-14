@@ -50,9 +50,9 @@ const POLLING_CONFIG = {
     INITIAL_DELAY: 5000,        // First poll after 5s (hCaptcha needs time to process)
     MAX_DELAY: 15000,           // Max 15s between polls
     BACKOFF_FACTOR: 1.12,       // Increase delay by 12% each time (slower backoff)
-    MAX_ATTEMPTS: 80,           // Max 80 attempts (~8 minutes with backoff)
-    TIMEOUT_MS: 480000,         // 8 minutes total timeout (OwO allows 10 min, keep 2 min margin)
-    SERVER_TIMEOUT_RETRY: 5,    // Retry 5 times if YesCaptcha server times out
+    MAX_ATTEMPTS: 30,           // Max 30 attempts (~3 minutes with backoff)
+    TIMEOUT_MS: 180000,         // 3 minutes timeout (faster failover to backup provider)
+    SERVER_TIMEOUT_RETRY: 2,    // Retry 2 times if YesCaptcha server times out, then failover
 } as const;
 
 // --- Helper Function ---
