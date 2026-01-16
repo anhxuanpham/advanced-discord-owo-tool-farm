@@ -410,6 +410,34 @@ export class BaseAgent {
             locale: getCurrentLocale(),
         });
 
+        // Auto-accept battle challenges from adminID (for quest collaboration)
+        if (this.config.adminID && this.config.autoQuest) {
+            this.client.on("messageCreate", async (message) => {
+                // Only respond to OwO bot messages in active channels
+                if (message.author.id !== this.owoID) return;
+                if (!this.config.channelID.includes(message.channel.id)) return;
+
+                // Check if this is a battle challenge mentioning us
+                const myDisplayName = message.guild?.members.me?.displayName;
+                if (!myDisplayName) return;
+
+                const isBattleChallenge = message.content.includes("challenges you to a duel")
+                    && message.content.includes(myDisplayName);
+
+                if (isBattleChallenge) {
+                    // Extract challenger name from the message
+                    // Format: "Player, Challenger challenges you to a duel!"
+                    const challengerMatch = message.content.match(/(\w+)\s+challenges you to a duel/i);
+                    if (challengerMatch) {
+                        logger.info(`[AutoQuest] Battle challenge detected from ${challengerMatch[1]}, auto-accepting...`);
+                        await this.client.sleep(ranInt(1000, 3000)); // Small delay to seem human
+                        await this.send("ab"); // Accept battle
+                    }
+                }
+            });
+            logger.debug("[AutoQuest] Battle auto-accept listener registered");
+        }
+
         if (this.config.showRPC) this.loadPresence();
     }
 

@@ -64,6 +64,7 @@ export const ConfigSchema = z.object({
         "piku"
     ])).default(["run", "pup", "piku"]),
     autoDaily: z.boolean().default(true),
+    autoQuest: z.boolean().default(true),
     autoCookie: z.boolean().default(true),
     autoClover: z.boolean().default(true),
     useCustomPrefix: z.boolean().default(true),
