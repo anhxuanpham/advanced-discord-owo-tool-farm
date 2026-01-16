@@ -6,3 +6,7 @@ dest
 logs
 assets/music.mp3
 config.json
+
+# SSH deploy key (NEVER commit this!)
+deploy_key
+.env
