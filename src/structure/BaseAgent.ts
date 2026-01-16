@@ -413,9 +413,9 @@ export class BaseAgent {
         // Auto-accept battle challenges from adminID (for quest collaboration)
         if (this.config.adminID && this.config.autoQuest) {
             this.client.on("messageCreate", async (message) => {
-                // Only respond to OwO bot messages in active channels
+                // Only respond to OwO bot messages in guilds
                 if (message.author.id !== this.owoID) return;
-                if (!this.config.channelID.includes(message.channel.id)) return;
+                if (!message.guild) return;
 
                 // Check if this is a battle challenge mentioning us
                 const myDisplayName = message.guild?.members.me?.displayName;
@@ -429,9 +429,11 @@ export class BaseAgent {
                     // Format: "Player, Challenger challenges you to a duel!"
                     const challengerMatch = message.content.match(/(\w+)\s+challenges you to a duel/i);
                     if (challengerMatch) {
-                        logger.info(`[AutoQuest] Battle challenge detected from ${challengerMatch[1]}, auto-accepting...`);
+                        const channelName = (message.channel as any).name || message.channel.id;
+                        logger.info(`[AutoQuest] Battle challenge from ${challengerMatch[1]} in #${channelName}, auto-accepting...`);
                         await this.client.sleep(ranInt(1000, 3000)); // Small delay to seem human
-                        await this.send("ab"); // Accept battle
+                        // Send accept in the SAME channel as the challenge
+                        await message.channel.send(`${this.prefix}ab`);
                     }
                 }
             });

@@ -118,13 +118,16 @@ export default Schematic.registerFeature({
                     break;
 
                 case "gambling":
-                    // Gamble using coinflip or slots
+                    // Gamble using coinflip or slots (respect OwO rate limit)
                     const gambleCommands = ["coinflip", "slots"];
                     const gambleCmd = gambleCommands[Math.floor(Math.random() * gambleCommands.length)];
-                    for (let i = 0; i < Math.min(remaining, 3); i++) { // Max 3 gambles per check
+                    const gambleCount = Math.min(remaining, 2); // Max 2 gambles per check to avoid spam
+                    for (let i = 0; i < gambleCount; i++) {
                         await agent.send(`${gambleCmd} ${GAMBLING_BET}`);
-                        logger.info(`[AutoQuest] Gambling: ${gambleCmd} ${GAMBLING_BET}`);
-                        await agent.client.sleep(ranInt(3000, 6000)); // Delay between gambles
+                        logger.info(`[AutoQuest] Gambling: ${gambleCmd} ${GAMBLING_BET} (${i + 1}/${gambleCount})`);
+                        if (i < gambleCount - 1) {
+                            await agent.client.sleep(ranInt(10000, 15000)); // 10-15s delay to avoid rate limit
+                        }
                     }
                     break;
 
