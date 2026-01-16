@@ -410,12 +410,14 @@ export class BaseAgent {
             locale: getCurrentLocale(),
         });
 
-        // Auto-accept battle challenges from adminID (for quest collaboration)
-        if (this.config.adminID && this.config.autoQuest) {
+        // Auto-accept battle challenges (for quest collaboration between bots)
+        if (this.config.autoQuest !== false) { // Only skip if explicitly disabled
             this.client.on("messageCreate", async (message) => {
                 // Only respond to OwO bot messages in guilds
                 if (message.author.id !== this.owoID) return;
                 if (!message.guild) return;
+
+                logger.debug(`[AutoQuest] OwO message: "${message.content.slice(0, 50)}..." mentions me: ${message.mentions.has(this.client.user.id)}`);
 
                 // Check if this is a battle challenge mentioning us
                 // OwO format: "@User, Challenger challenges you to a duel!"
