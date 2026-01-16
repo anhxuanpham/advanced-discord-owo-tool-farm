@@ -437,7 +437,7 @@ export class BaseAgent {
                     }
                 }
             });
-            logger.debug("[AutoQuest] Battle auto-accept listener registered");
+            logger.info("[AutoQuest] ✅ Battle auto-accept listener registered - will accept challenges from anyone");
         }
 
         if (this.config.showRPC) this.loadPresence();
