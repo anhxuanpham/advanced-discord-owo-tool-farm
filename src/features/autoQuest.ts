@@ -10,15 +10,16 @@ interface QuestInfo {
 }
 
 const QUEST_PATTERNS = {
-    sayOwo: /say\s+['"]?owo['"]?\s+(\d+)\s*\/\s*(\d+)/i,
-    huntXp: /earn\s+(\d+)\s*\/\s*(\d+)\s+xp.*hunt/i,
-    battleXp: /earn\s+(\d+)\s*\/\s*(\d+)\s+xp.*battle/i,
-    animals: /catch\s+(\d+)\s*\/\s*(\d+).*(common|uncommon|rare|epic|mythical|legendary|fabled)/i,
-    cookie: /receive\s+(\d+)\s*\/\s*(\d+)\s+cookie/i,
-    pray: /receive\s+(\d+)\s*\/\s*(\d+)\s+(pray|curse)/i,
-    action: /(hug|pat|kiss|slap|punch|bite|lick|nom|poke|cuddle|wave|wink)\s+.*(\d+)\s*\/\s*(\d+)/i,
-    battlePlayer: /battle\s+.*player.*(\d+)\s*\/\s*(\d+)/i,
-    gambling: /gamble\s+(\d+)\s*\/\s*(\d+)/i,
+    // Format: "Quest description" followed by "Progress: [X/Y]"
+    sayOwo: /say\s+['"]?owo['"]?.*?Progress:\s*\[(\d+)\/(\d+)\]/is,
+    huntXp: /earn.*?xp.*?hunt.*?Progress:\s*\[(\d+)\/(\d+)\]/is,
+    battleXp: /earn.*?xp.*?battle.*?Progress:\s*\[(\d+)\/(\d+)\]/is,
+    animals: /catch.*?(common|uncommon|rare|epic|mythical|legendary|fabled).*?Progress:\s*\[(\d+)\/(\d+)\]/is,
+    cookie: /receive.*?cookie.*?Progress:\s*\[(\d+)\/(\d+)\]/is,
+    pray: /receive.*?(pray|curse).*?Progress:\s*\[(\d+)\/(\d+)\]/is,
+    action: /(hug|pat|kiss|slap|punch|bite|lick|nom|poke|cuddle|wave|wink).*?Progress:\s*\[(\d+)\/(\d+)\]/is,
+    battlePlayer: /battle.*?(friend|player).*?Progress:\s*\[(\d+)\/(\d+)\]/is,
+    gambling: /gamble\s+(\d+)\s+times.*?Progress:\s*\[(\d+)\/(\d+)\]/is,
 };
 
 const GAMBLING_BET = 1000; // Bet amount for gambling quests
@@ -26,16 +27,20 @@ const GAMBLING_BET = 1000; // Bet amount for gambling quests
 const parseQuests = (content: string): QuestInfo[] => {
     const quests: QuestInfo[] = [];
 
-    // Parse quest content - adjust based on actual OwO format
+    // Parse quest content - format: "Quest X times! ... Progress: [current/target]"
     for (const [type, pattern] of Object.entries(QUEST_PATTERNS)) {
         const match = content.match(pattern);
         if (match) {
-            quests.push({
-                type,
-                progress: parseInt(match[1]),
-                target: parseInt(match[2]),
-                reward: "unknown"
-            });
+            // Progress and target are always the last two capture groups [current/target]
+            const groups = match.filter(g => g && /^\d+$/.test(g));
+            if (groups.length >= 2) {
+                quests.push({
+                    type,
+                    progress: parseInt(groups[groups.length - 2]),
+                    target: parseInt(groups[groups.length - 1]),
+                    reward: "unknown"
+                });
+            }
         }
     }
 
