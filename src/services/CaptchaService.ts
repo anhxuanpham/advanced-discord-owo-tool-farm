@@ -6,6 +6,7 @@ import { TwoCrawlerSolver } from "@/services/solvers/TwoCrawlerSolver.js";
 import { FailoverCaptchaSolver } from "@/services/solvers/FailoverCaptchaSolver.js";
 import { downloadAttachment } from "@/utils/download.js";
 import { logger } from "@/utils/logger.js";
+import { ranInt } from "@/utils/math.js";
 import axios from "axios";
 import { wrapper } from "axios-cookiejar-support";
 import { CookieJar } from "tough-cookie";
@@ -311,6 +312,13 @@ export class CaptchaService {
         }
 
         try {
+            // Anti-detection: Human reaction time (3-8s) before starting to solve
+            if (retries === 0) {
+                const reactionTime = ranInt(3000, 8000);
+                logger.info(`[Captcha] Waiting ${(reactionTime / 1000).toFixed(1)}s (simulating human reaction)...`);
+                await new Promise(resolve => setTimeout(resolve, reactionTime));
+            }
+
             const attachmentUrl = message.attachments.first()?.url;
             if (attachmentUrl) {
                 logger.info(`[Captcha] Image captcha detected, attempting to solve... (Attempt ${retries + 1}/${maxRetries + 1})`);
