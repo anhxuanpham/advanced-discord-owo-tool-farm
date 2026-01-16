@@ -73,7 +73,7 @@ const useGems = async (params: FeatureFnParams, huntMsg: Message) => {
     const totalGems = agent.gem1Cache.length + agent.gem2Cache.length + agent.gem3Cache.length + agent.starCache.length;
     if (totalGems === 0) {
         logger.info(t("features.autoHunt.noGems"));
-        agent.config.autoGem = 0; // Disable feature if no gems are left
+        // Don't disable autoGem permanently - gems may be acquired later from lootboxes
         return;
     }
 
