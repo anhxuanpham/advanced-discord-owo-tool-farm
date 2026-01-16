@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Starting deployment to all servers..."
+echo "🚀 Starting deployment to all servers (minimal downtime)..."
 
 # Server 1: root@143.198.212.100 (direct root access)
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -9,8 +9,7 @@ echo "📦 Deploying to Server 1 (143.198.212.100)..."
 ssh root@143.198.212.100 << 'EOF'
 cd ~/advanced-discord-owo-tool-farm
 git pull origin main
-docker-compose down
-docker-compose up -d --build
+docker-compose up -d --build --force-recreate
 echo "✅ Server 1 deployed!"
 EOF
 
@@ -18,7 +17,7 @@ EOF
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "📦 Deploying to Server 2 (34.158.63.223)..."
 ssh William@34.158.63.223 << 'EOF'
-sudo bash -c 'cd /root/advanced-discord-owo-tool-farm && git pull origin main && docker-compose down && docker-compose up -d --build'
+sudo bash -c 'cd /root/advanced-discord-owo-tool-farm && git pull origin main && docker-compose up -d --build --force-recreate'
 echo "✅ Server 2 deployed!"
 EOF
 
@@ -26,7 +25,7 @@ EOF
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "📦 Deploying to Server 3 (34.126.130.69)..."
 ssh William@34.126.130.69 << 'EOF'
-sudo bash -c 'cd /root/advanced-discord-owo-tool-farm && git pull origin main && docker-compose down && docker-compose up -d --build'
+sudo bash -c 'cd /root/advanced-discord-owo-tool-farm && git pull origin main && docker-compose up -d --build --force-recreate'
 echo "✅ Server 3 deployed!"
 EOF
 
