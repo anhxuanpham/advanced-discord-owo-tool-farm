@@ -10,9 +10,49 @@ import packageJSON from "./package.json" with { type: "json" };
 import { Locale } from "@/utils/locales.js";
 import { SentryService } from "@/services/SentryService.js";
 import { ConfigManager } from "@/structure/core/ConfigManager.js";
+import { CaptchaService } from "@/services/CaptchaService.js";
 
 // Initialize Sentry as early as possible for error tracking
 SentryService.init("https://1587723679cbc7f73e0ab4231f3a666c@o4510616815140864.ingest.us.sentry.io/4510616837619712");
+
+// Graceful shutdown handler - wait for captcha solving to complete
+let isShuttingDown = false;
+const gracefulShutdown = async (signal: string) => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+
+    logger.info(`\n⚠️ Received ${signal}, initiating graceful shutdown...`);
+
+    // Check if captcha solving is in progress
+    if (CaptchaService.isSolving()) {
+        logger.warn("🔄 Captcha solving in progress, waiting for completion...");
+
+        // Wait up to 10 minutes for captcha to complete (OwO timeout is ~10min)
+        const maxWait = 10 * 60 * 1000;
+        const startTime = Date.now();
+
+        while (CaptchaService.isSolving() && Date.now() - startTime < maxWait) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            if (elapsed % 10 === 0) { // Log every 10 seconds
+                logger.info(`⏳ Still waiting for captcha... (${elapsed}s elapsed)`);
+            }
+        }
+
+        if (CaptchaService.isSolving()) {
+            logger.error("⚠️ Captcha still in progress after max wait, forcing shutdown...");
+        } else {
+            logger.info("✅ Captcha completed, proceeding with shutdown.");
+        }
+    }
+
+    logger.info("👋 Graceful shutdown complete. Goodbye!");
+    process.exit(0);
+};
+
+// Register signal handlers
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 process.title = `Advanced Discord OwO Tool Farm v${packageJSON.version} - Copyright 2025 © Elysia x Kyou Izumi`;
 console.clear();

@@ -234,6 +234,11 @@ export class CaptchaService {
     private static captchaStartTime = 0;
     private static lastProgressNotifyTime = 0;
 
+    // Check if captcha solving is in progress (for graceful shutdown)
+    public static isSolving(): boolean {
+        return CaptchaService.solvingInProgress;
+    }
+
     public static async handleCaptcha(params: BaseParams, message: Message, retries: number = 0): Promise<void> {
         const { agent } = params;
         const normalizedContent = message.content.normalize("NFC").replace(NORMALIZE_REGEX, "");
