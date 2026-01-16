@@ -49,7 +49,7 @@ const parseQuests = (content: string): QuestInfo[] => {
 
 export default Schematic.registerFeature({
     name: "autoQuest",
-    cooldown: () => ranInt(30 * 60 * 1000, 45 * 60 * 1000), // 30-45 phút
+    cooldown: () => ranInt(3 * 60 * 1000, 4 * 60 * 1000), // 3-4 phút
     condition: async ({ agent: { config } }) => {
         if (!config.autoQuest) return false;
         return true;
@@ -118,17 +118,12 @@ export default Schematic.registerFeature({
                     break;
 
                 case "gambling":
-                    // Gamble using coinflip or slots (respect OwO rate limit)
+                    // Gamble using coinflip or slots (3 min cooldown)
                     const gambleCommands = ["coinflip", "slots"];
                     const gambleCmd = gambleCommands[Math.floor(Math.random() * gambleCommands.length)];
-                    const gambleCount = Math.min(remaining, 2); // Max 2 gambles per check to avoid spam
-                    for (let i = 0; i < gambleCount; i++) {
-                        await agent.send(`${gambleCmd} ${GAMBLING_BET}`);
-                        logger.info(`[AutoQuest] Gambling: ${gambleCmd} ${GAMBLING_BET} (${i + 1}/${gambleCount})`);
-                        if (i < gambleCount - 1) {
-                            await agent.client.sleep(ranInt(10000, 15000)); // 10-15s delay to avoid rate limit
-                        }
-                    }
+                    // Only 1 gamble per quest check, 3 min cooldown between checks
+                    await agent.send(`${gambleCmd} ${GAMBLING_BET}`);
+                    logger.info(`[AutoQuest] Gambling: ${gambleCmd} ${GAMBLING_BET}`);
                     break;
 
                 default:
