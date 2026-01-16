@@ -18,7 +18,10 @@ const QUEST_PATTERNS = {
     pray: /receive\s+(\d+)\s*\/\s*(\d+)\s+(pray|curse)/i,
     action: /(hug|pat|kiss|slap|punch|bite|lick|nom|poke|cuddle|wave|wink)\s+.*(\d+)\s*\/\s*(\d+)/i,
     battlePlayer: /battle\s+.*player.*(\d+)\s*\/\s*(\d+)/i,
+    gambling: /gamble\s+(\d+)\s*\/\s*(\d+)/i,
 };
+
+const GAMBLING_BET = 1000; // Bet amount for gambling quests
 
 const parseQuests = (content: string): QuestInfo[] => {
     const quests: QuestInfo[] = [];
@@ -106,6 +109,17 @@ export default Schematic.registerFeature({
                     if (agent.config.adminID) {
                         await agent.send(`battle <@${agent.config.adminID}>`);
                         logger.info(`[AutoQuest] Challenged admin to battle`);
+                    }
+                    break;
+
+                case "gambling":
+                    // Gamble using coinflip or slots
+                    const gambleCommands = ["coinflip", "slots"];
+                    const gambleCmd = gambleCommands[Math.floor(Math.random() * gambleCommands.length)];
+                    for (let i = 0; i < Math.min(remaining, 3); i++) { // Max 3 gambles per check
+                        await agent.send(`${gambleCmd} ${GAMBLING_BET}`);
+                        logger.info(`[AutoQuest] Gambling: ${gambleCmd} ${GAMBLING_BET}`);
+                        await agent.client.sleep(ranInt(3000, 6000)); // Delay between gambles
                     }
                     break;
 
