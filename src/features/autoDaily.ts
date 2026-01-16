@@ -22,7 +22,6 @@ export default Schematic.registerFeature({
         return true;
     },
     run: async ({ agent }) => {
-        agent.send("daily")
-        agent.config.autoDaily = false; // Disable autoDaily after running
+        await agent.send("daily");
     }
 })
