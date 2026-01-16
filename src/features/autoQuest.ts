@@ -22,7 +22,14 @@ const QUEST_PATTERNS = {
     gambling: /gamble\s+(\d+)\s+times.*?Progress:\s*\[(\d+)\/(\d+)\]/is,
 };
 
+// Quests that cannot be auto-completed (need other players)
+const UNCOMPLETABLE_QUESTS = ["battlePlayer", "cookie", "pray"];
+
 const GAMBLING_BET = 1000; // Bet amount for gambling quests
+
+// Track reroll usage (1 per day)
+let lastRerollDate = "";
+let rerollUsed = false;
 
 const parseQuests = (content: string): QuestInfo[] => {
     const quests: QuestInfo[] = [];
@@ -76,6 +83,36 @@ export default Schematic.registerFeature({
 
         logger.info(`[AutoQuest] Found ${quests.length} active quests`);
 
+        // Reset reroll flag at new day
+        const today = new Date().toDateString();
+        if (lastRerollDate !== today) {
+            lastRerollDate = today;
+            rerollUsed = false;
+        }
+
+        // Check for uncompletable quests and reroll (1-indexed for OwO)
+        if (!rerollUsed) {
+            for (let i = 0; i < quests.length; i++) {
+                const quest = quests[i];
+                if (UNCOMPLETABLE_QUESTS.includes(quest.type) && quest.progress === 0) {
+                    const questNum = i + 1; // OwO uses 1-indexed
+                    logger.info(`[AutoQuest] Quest ${questNum} "${quest.type}" cannot be auto-completed, rerolling...`);
+
+                    await agent.awaitResponse({
+                        trigger: () => agent.send(`quest rr ${questNum}`),
+                        filter: (m) => m.author.id === agent.owoID,
+                        expectResponse: true,
+                    });
+
+                    rerollUsed = true;
+                    logger.info(`[AutoQuest] Rerolled quest ${questNum}!`);
+
+                    // Return to re-check quests next cycle
+                    return;
+                }
+            }
+        }
+
         for (const quest of quests) {
             if (quest.progress >= quest.target) {
                 logger.info(`[AutoQuest] Quest "${quest.type}" already completed!`);
@@ -92,29 +129,10 @@ export default Schematic.registerFeature({
 
                 case "cookie":
                 case "pray":
-                    // Request from admin - gửi tin nhắn reminder
-                    if (agent.config.adminID) {
-                        logger.info(`[AutoQuest] Need ${remaining} ${quest.type} from admin`);
-                        // Admin sẽ gửi cookie/pray khi thấy notification
-                    }
-                    break;
-
-                case "action":
-                    // Do action on admin
-                    if (agent.config.adminID) {
-                        const actions = ["hug", "pat", "cuddle"];
-                        const action = actions[Math.floor(Math.random() * actions.length)];
-                        await agent.send(`${action} <@${agent.config.adminID}>`);
-                        logger.info(`[AutoQuest] Sent ${action} to admin`);
-                    }
-                    break;
-
                 case "battlePlayer":
-                    // Battle with admin
-                    if (agent.config.adminID) {
-                        await agent.send(`battle <@${agent.config.adminID}>`);
-                        logger.info(`[AutoQuest] Challenged admin to battle`);
-                    }
+                    // These quests are auto-rerolled if detected at 0 progress
+                    // If still here, means progress > 0 or already used reroll today
+                    logger.debug(`[AutoQuest] ${quest.type}: ${quest.progress}/${quest.target} - cannot auto-complete`);
                     break;
 
                 case "gambling":
