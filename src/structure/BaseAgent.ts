@@ -410,35 +410,7 @@ export class BaseAgent {
             locale: getCurrentLocale(),
         });
 
-        // Auto-accept battle challenges (for quest collaboration between bots)
-        if (this.config.autoQuest !== false) { // Only skip if explicitly disabled
-            this.client.on("messageCreate", async (message) => {
-                // Only respond to OwO bot messages in guilds
-                if (message.author.id !== this.owoID) return;
-                if (!message.guild) return;
-
-                logger.debug(`[AutoQuest] OwO message: "${message.content.slice(0, 50)}..." mentions me: ${message.mentions.has(this.client.user.id)}`);
-
-                // Check if this is a battle challenge mentioning us
-                // OwO format: "@User, Challenger challenges you to a duel!"
-                const isBattleChallenge = message.content.includes("challenges you to a duel")
-                    && message.mentions.has(this.client.user.id);
-
-                if (isBattleChallenge) {
-                    // Extract challenger name from the message
-                    // Format: "Player, Challenger challenges you to a duel!"
-                    const challengerMatch = message.content.match(/(\w+)\s+challenges you to a duel/i);
-                    if (challengerMatch) {
-                        const channelName = (message.channel as any).name || message.channel.id;
-                        logger.info(`[AutoQuest] Battle challenge from ${challengerMatch[1]} in #${channelName}, auto-accepting...`);
-                        await this.client.sleep(ranInt(1000, 3000)); // Small delay to seem human
-                        // Send accept in the SAME channel as the challenge
-                        await message.channel.send(`${this.prefix}ab`);
-                    }
-                }
-            });
-            logger.info("[AutoQuest] ✅ Battle auto-accept listener registered - will accept challenges from anyone");
-        }
+        // NOTE: Auto-accept battle removed - selfbot doesn't receive messageCreate for other channels reliably
 
         if (this.config.showRPC) this.loadPresence();
     }
