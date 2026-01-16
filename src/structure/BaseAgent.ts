@@ -418,11 +418,9 @@ export class BaseAgent {
                 if (!message.guild) return;
 
                 // Check if this is a battle challenge mentioning us
-                const myDisplayName = message.guild?.members.me?.displayName;
-                if (!myDisplayName) return;
-
+                // OwO format: "@User, Challenger challenges you to a duel!"
                 const isBattleChallenge = message.content.includes("challenges you to a duel")
-                    && message.content.includes(myDisplayName);
+                    && message.mentions.has(this.client.user.id);
 
                 if (isBattleChallenge) {
                     // Extract challenger name from the message
