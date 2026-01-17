@@ -17,7 +17,7 @@ const QUEST_PATTERNS = {
     animals: /catch.*?(common|uncommon|rare|epic|mythical|legendary|fabled).*?Progress:\s*\[(\d+)\/(\d+)\]/is,
     cookie: /receive.*?cookie.*?Progress:\s*\[(\d+)\/(\d+)\]/is,
     pray: /receive.*?(pray|curse).*?Progress:\s*\[(\d+)\/(\d+)\]/is,
-    action: /(hug|pat|kiss|slap|punch|bite|lick|nom|poke|cuddle|wave|wink).*?Progress:\s*\[(\d+)\/(\d+)\]/is,
+    action: /use\s+an?\s+action\s+command.*?(\d+)\s*times[\s\S]*?Progress:\s*\[(\d+)\/(\d+)\]/i,
     battlePlayer: /battle.*?(friend|player).*?Progress:\s*\[(\d+)\/(\d+)\]/is,
     gambling: /gamble\s+(\d+)\s+times.*?Progress:\s*\[(\d+)\/(\d+)\]/is,
 };
