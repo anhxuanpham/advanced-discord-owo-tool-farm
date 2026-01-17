@@ -38,11 +38,20 @@ const useGems = async (params: FeatureFnParams, huntMsg: Message) => {
 
     const inventory = invMsg.content.split("`");
 
+    // Debug: Log inventory parsing
+    logger.debug(`[AutoLootbox] Raw inventory items: ${inventory.filter(i => /^\d+$/.test(i)).join(", ")}`);
+    logger.debug(`[AutoLootbox] Has 050 (lootbox)? ${inventory.includes("050")}`);
+    logger.debug(`[AutoLootbox] Has 049 (fabled)? ${inventory.includes("049")}`);
+    logger.debug(`[AutoLootbox] autoLootbox config: ${agent.config.autoLootbox}`);
+    logger.debug(`[AutoLootbox] autoFabledLootbox config: ${agent.config.autoFabledLootbox}`);
+
     if (agent.config.autoFabledLootbox && inventory.includes("049")) {
+        logger.info("[AutoLootbox] Opening fabled lootbox!");
         await agent.send("lb fabled");
     }
 
     if (agent.config.autoLootbox && inventory.includes("050")) {
+        logger.info("[AutoLootbox] Opening all lootboxes!");
         await agent.send("lb all");
 
         // After opening, re-run the hunt to get an accurate state.
