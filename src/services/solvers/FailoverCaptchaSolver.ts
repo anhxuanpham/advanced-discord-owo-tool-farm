@@ -110,34 +110,66 @@ export class FailoverCaptchaSolver implements CaptchaSolver {
      * Hard timeout ensures we don't exceed OwO's 10-minute deadline
      */
     /**
-     * Solve hCaptcha with failover - DUAL TEST MODE
-     * Runs ALL solvers in parallel to verify they work.
-     * Returns the first successful result.
+     * Solve hCaptcha with failover - keeps trying until success or hard timeout
+     * Hard timeout ensures we don't exceed OwO's 10-minute deadline
      */
     public async solveHcaptcha(sitekey: string, siteurl: string): Promise<string> {
-        // DUAL TEST MODE: Execute all solvers
-        const promises = this.solvers.map(async ({ name, solver }) => {
-            try {
-                logger.debug(`[DualTest] Starting ${name}...`);
-                const result = await solver.solveHcaptcha(sitekey, siteurl);
-                logger.info(`[DualTest] ✅ ${name} SUCCEEDED! (Token len: ${result.length})`);
-                return result;
-            } catch (error) {
-                const msg = error instanceof Error ? error.message : String(error);
-                logger.warn(`[DualTest] ❌ ${name} FAILED: ${msg}`);
-                throw error;
-            }
-        });
+        const startTime = Date.now();
+        const HARD_TIMEOUT_MS = 9 * 60 * 1000; // 9 minutes hard limit (OwO allows 10 min)
+        const RETRY_DELAY_MS = 30000; // 30 seconds between rounds
 
-        try {
-            // Return the first successful result (fastest wins)
-            // This ensures the bot continues without waiting for the slower solver
-            const result = await Promise.any(promises);
-            return result;
-        } catch (error) {
-            // AggregateError if all failed
-            throw new Error(`[DualTest] All providers failed: ${error}`);
+        let lastError: Error | null = null;
+        let totalAttempts = 0;
+
+        while (Date.now() - startTime < HARD_TIMEOUT_MS) {
+            const startSolverIndex = this.currentIndex;
+            let roundAttempts = 0;
+            const maxRoundAttempts = this.solvers.length * 2; // Each round tries each solver twice
+
+            while (roundAttempts < maxRoundAttempts) {
+                // Check hard timeout
+                if (Date.now() - startTime >= HARD_TIMEOUT_MS) {
+                    break;
+                }
+
+                const { name, solver } = this.getCurrentSolver();
+                roundAttempts++;
+                totalAttempts++;
+
+                try {
+                    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                    logger.info(`[FailoverSolver] Trying ${name} for hCaptcha (attempt ${totalAttempts}, ${elapsed}s elapsed)`);
+                    const result = await solver.solveHcaptcha(sitekey, siteurl);
+                    this.recordSuccess(name);
+                    logger.info(`[FailoverSolver] ${name} succeeded!`);
+                    return result;
+                } catch (error) {
+                    lastError = error instanceof Error ? error : new Error(String(error));
+                    logger.warn(`[FailoverSolver] ${name} failed: ${lastError.message}`);
+
+                    const shouldSwitch = this.recordFailure(name);
+                    if (shouldSwitch) {
+                        this.switchToNextSolver();
+
+                        if (this.currentIndex === startSolverIndex) {
+                            logger.warn(`[FailoverSolver] All providers failed once, will retry...`);
+                        }
+                    }
+
+                    // Small delay before trying next provider
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+            }
+
+            // All providers exhausted in this round, wait and retry if time permits
+            const remainingTime = HARD_TIMEOUT_MS - (Date.now() - startTime);
+            if (remainingTime > RETRY_DELAY_MS) {
+                logger.warn(`[FailoverSolver] All providers exhausted, waiting 30s before retry (${Math.floor(remainingTime / 1000)}s remaining)`);
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+            }
         }
+
+        throw new Error(`[FailoverSolver] Hard timeout reached after ${totalAttempts} attempts. Last error: ${lastError?.message}`);
     }
 
     /**
