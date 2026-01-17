@@ -27,6 +27,9 @@ const UNCOMPLETABLE_QUESTS = ["battlePlayer", "cookie", "pray"];
 
 const GAMBLING_BET = 1000; // Bet amount for gambling quests
 
+// Action commands for action quests (will be sent to adminID)
+const ACTION_COMMANDS = ["hug", "pat", "kiss", "cuddle", "poke", "slap", "bite", "lick", "nom", "punch", "wave", "wink"];
+
 // Track reroll usage (1 per day)
 let lastRerollDate = "";
 let rerollUsed = false;
@@ -142,6 +145,23 @@ export default Schematic.registerFeature({
                     // Only 1 gamble per quest check, 3 min cooldown between checks
                     await agent.send(`${gambleCmd} ${GAMBLING_BET}`);
                     logger.info(`[AutoQuest] Gambling: ${gambleCmd} ${GAMBLING_BET}`);
+                    break;
+
+                case "action":
+                    // Send action command to adminID
+                    if (!agent.config.adminID) {
+                        logger.warn("[AutoQuest] Action quest detected but no adminID configured - cannot auto-complete");
+                        break;
+                    }
+
+                    // Do up to remaining actions (max 3 per cycle to avoid spam)
+                    const actionsThisCycle = Math.min(remaining, 3);
+                    for (let i = 0; i < actionsThisCycle; i++) {
+                        const actionCmd = ACTION_COMMANDS[Math.floor(Math.random() * ACTION_COMMANDS.length)];
+                        await agent.send(`${actionCmd} <@${agent.config.adminID}>`);
+                        logger.info(`[AutoQuest] Action: ${actionCmd} <@${agent.config.adminID}> (${quest.progress + i + 1}/${quest.target})`);
+                        await agent.client.sleep(ranInt(3 * 60 * 1000, 4 * 60 * 1000)); // Delay 3-4 minutes between actions
+                    }
                     break;
 
                 default:
