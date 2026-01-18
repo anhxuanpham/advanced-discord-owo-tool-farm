@@ -1,4 +1,4 @@
-import { MessageActionRow, MessageButton } from "discord.js-selfbot-v13";
+import { Message, MessageActionRow, MessageButton } from "discord.js-selfbot-v13";
 
 import { Schematic } from "@/structure/Schematic.js";
 import { logger } from "@/utils/logger.js";
@@ -62,10 +62,14 @@ export default Schematic.registerFeature({
             return;
         }
 
-        if (response.content.toLowerCase().includes("ran out of boss tickets")) {
-            const timeMatch = response.content.match(/Replenishes in (.*)/i);
-            const timeInfo = timeMatch ? timeMatch[1] : "some time";
+        const lowerContent = response.content.toLowerCase();
+        if (lowerContent.includes("ran out of boss tickets") || lowerContent.includes("don't have any boss tickets")) {
+            const timeMatch = response.content.match(/Replenishes in (.*)/i) || response.content.match(/next ticket in (.*)/i);
+            const timeInfo = timeMatch ? timeMatch[1].split('\n')[0].trim() : "some time";
             logger.info(`[AutoBoss] Out of boss tickets. Replenishes in: ${timeInfo}`);
+
+            // If we have time info, we can try to parse it to set a better cooldown
+            // But for now, we just log it and let the default cooldown handle it
             return;
         }
 
@@ -89,10 +93,18 @@ export default Schematic.registerFeature({
         await agent.client.sleep(ranInt(500, 1500));
 
         try {
-            await response.clickButton(button.customId);
+            const interactionResponse = await response.clickButton(button.customId);
             logger.info("[AutoBoss] ✅ Clicked Fight button!");
 
-
+            // Check if the interaction response indicates no tickets
+            if (interactionResponse && interactionResponse instanceof Message) {
+                const lowerIR = (interactionResponse.content || "").toLowerCase();
+                if (lowerIR.includes("don't have any boss tickets") || lowerIR.includes("ran out of boss tickets")) {
+                    const timeMatch = lowerIR.match(/replenishes in (.*)/i) || lowerIR.match(/next ticket in (.*)/i);
+                    const timeInfo = timeMatch ? timeMatch[1].split('\n')[0].trim() : "some time";
+                    logger.info(`[AutoBoss] Out of boss tickets (confirmed after click). Replenishes in: ${timeInfo}`);
+                }
+            }
         } catch (error) {
             const msg = String(error);
             if (msg.includes("BUTTON_CANNOT_CLICK") || msg.includes("disabled")) {
