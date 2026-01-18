@@ -7,86 +7,62 @@ import { ranInt } from "@/utils/math.js";
 export default Schematic.registerFeature({
     name: "autoBoss",
     cooldown: () => ranInt(15 * 60 * 1000, 17 * 60 * 1000), // 15-17 minutes
-    condition: async () => {
-        // Always enabled - will add autoBoss config flag if needed later
-        return true;
-    },
+    condition: async () => true,
     run: async ({ agent }) => {
         logger.info("[AutoBoss] Checking for guild boss...");
 
         // Send boss command
         const bossMsg = await agent.awaitResponse({
             trigger: () => agent.send("boss"),
-            filter: (m) => m.author.id === agent.owoID &&
-                ((m.embeds.length > 0 && m.embeds[0].title?.includes("Guild Boss")) ||
-                    m.content.includes("boss") ||
-                    m.components.length > 0),
+            filter: (m) => m.author.id === agent.owoID,
             expectResponse: true,
         });
 
         if (!bossMsg) {
-            logger.warn("[AutoBoss] Could not get boss info");
+            logger.warn("[AutoBoss] No response from OwO");
             return;
         }
 
-        // Check if there's a Fight button
-        if (bossMsg.components.length > 0) {
-            try {
-                const actionRow = bossMsg.components.find(
-                    (c) => c.type === "ACTION_ROW"
-                ) as MessageActionRow | undefined;
+        // Check if this is a boss message
+        const embedTitle = bossMsg.embeds[0]?.title || "";
+        const hasBossEmbed = embedTitle.includes("Guild Boss") || embedTitle.includes("Boss");
 
-                if (actionRow) {
-                    // Log all buttons for debugging
-                    logger.debug(`[AutoBoss] Found ${actionRow.components.length} components in action row`);
-                    for (const comp of actionRow.components) {
-                        if (comp.type === "BUTTON") {
-                            const btn = comp as MessageButton;
-                            logger.debug(`[AutoBoss] Button: label="${btn.label}", customId="${btn.customId}", style="${btn.style}"`);
-                        }
-                    }
+        if (!hasBossEmbed) {
+            logger.debug(`[AutoBoss] Not a boss message: "${embedTitle}"`);
+            return;
+        }
 
-                    const fightButton = actionRow.components.find(
-                        (c) => c.type === "BUTTON" &&
-                            ((c as MessageButton).label?.toLowerCase().includes("fight") ||
-                                (c as MessageButton).customId?.toLowerCase().includes("fight") ||
-                                (c as MessageButton).emoji?.name?.toLowerCase().includes("fight"))
-                    ) as MessageButton | undefined;
+        logger.info(`[AutoBoss] Found boss embed: "${embedTitle}"`);
+        logger.info(`[AutoBoss] Components: ${bossMsg.components.length}`);
 
-                    if (fightButton && fightButton.customId) {
-                        logger.info("[AutoBoss] Found Fight button, clicking...");
-                        await agent.client.sleep(ranInt(1000, 2000));
-                        await bossMsg.clickButton(fightButton.customId);
-                        logger.info("[AutoBoss] Clicked Fight button!");
-                    } else {
-                        // If no fight button by name, try first button with style PRIMARY or SUCCESS
-                        const primaryButton = actionRow.components.find(
-                            (c) => c.type === "BUTTON" &&
-                                ((c as MessageButton).style === "PRIMARY" || (c as MessageButton).style === "SUCCESS")
-                        ) as MessageButton | undefined;
+        // Wait a moment for message to fully load
+        await agent.client.sleep(500);
 
-                        if (primaryButton && primaryButton.customId) {
-                            logger.info(`[AutoBoss] Using primary/success button: ${primaryButton.label || primaryButton.customId}`);
-                            await agent.client.sleep(ranInt(1000, 2000));
-                            await bossMsg.clickButton(primaryButton.customId);
-                            logger.info("[AutoBoss] Clicked button!");
-                        } else {
-                            logger.debug("[AutoBoss] No suitable button found in message");
-                        }
-                    }
+        // Try to click Fight button
+        if (bossMsg.components.length === 0) {
+            logger.warn("[AutoBoss] Message has no components/buttons");
+            return;
+        }
+
+        for (const row of bossMsg.components) {
+            if (row.type !== "ACTION_ROW") continue;
+
+            const actionRow = row as MessageActionRow;
+            for (const comp of actionRow.components) {
+                if (comp.type !== "BUTTON") continue;
+
+                const btn = comp as MessageButton;
+                logger.info(`[AutoBoss] Button found: "${btn.label}" (${btn.customId})`);
+
+                if (btn.customId) {
+                    await agent.client.sleep(ranInt(500, 1000));
+                    await bossMsg.clickButton(btn.customId);
+                    logger.info("[AutoBoss] ✅ Clicked Fight button!");
+                    return;
                 }
-            } catch (error) {
-                logger.error(`[AutoBoss] Error clicking button: ${error}`);
-            }
-        } else {
-            // Check message content for cooldown or no boss
-            if (bossMsg.content.includes("cooldown") || bossMsg.content.includes("wait")) {
-                logger.debug("[AutoBoss] Boss is on cooldown");
-            } else if (bossMsg.content.includes("no boss") || bossMsg.content.includes("defeated")) {
-                logger.debug("[AutoBoss] No boss available");
-            } else {
-                logger.debug("[AutoBoss] Boss message has no buttons");
             }
         }
+
+        logger.warn("[AutoBoss] Could not find clickable button");
     }
 });
