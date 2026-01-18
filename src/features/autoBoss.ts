@@ -4,6 +4,43 @@ import { Schematic } from "@/structure/Schematic.js";
 import { logger } from "@/utils/logger.js";
 import { ranInt } from "@/utils/math.js";
 
+// Recursive function to find button in nested components
+function findButton(components: any[]): MessageButton | null {
+    for (const comp of components) {
+        // Direct button
+        if (comp.type === "BUTTON" && comp.customId) {
+            return comp as MessageButton;
+        }
+        // Nested in ACTION_ROW
+        if (comp.type === "ACTION_ROW" && comp.components) {
+            const btn = findButton(comp.components);
+            if (btn) return btn;
+        }
+        // Nested in CONTAINER (Components V2)
+        if (comp.type === "CONTAINER" && comp.components) {
+            const btn = findButton(comp.components);
+            if (btn) return btn;
+        }
+        // Nested in SECTION (Components V2)
+        if (comp.type === "SECTION" && comp.components) {
+            const btn = findButton(comp.components);
+            if (btn) return btn;
+        }
+        // SECTION may have accessory which is a button
+        if (comp.type === "SECTION" && comp.accessory) {
+            if (comp.accessory.type === "BUTTON" && comp.accessory.customId) {
+                return comp.accessory as MessageButton;
+            }
+        }
+        // Generic: any object with components array
+        if (comp.components && Array.isArray(comp.components)) {
+            const btn = findButton(comp.components);
+            if (btn) return btn;
+        }
+    }
+    return null;
+}
+
 export default Schematic.registerFeature({
     name: "autoBoss",
     cooldown: () => ranInt(15 * 60 * 1000, 17 * 60 * 1000), // 15-17 minutes
@@ -11,7 +48,7 @@ export default Schematic.registerFeature({
     run: async ({ agent }) => {
         logger.info("[AutoBoss] Checking for guild boss...");
 
-        // Filter: OwO message with components
+        // Wait for message with components
         const response = await agent.awaitResponse({
             trigger: () => agent.send("boss"),
             filter: msg => msg.author.id === agent.owoID && msg.components.length > 0,
@@ -25,29 +62,17 @@ export default Schematic.registerFeature({
 
         logger.info(`[AutoBoss] Got response with ${response.components.length} component rows`);
 
-        // Log component structure for debugging
-        const row = response.components[0];
-        logger.debug(`[AutoBoss] Row type: ${row?.type} (${typeof row?.type})`);
+        // Find button recursively
+        const button = findButton(response.components);
 
-        // Cast to MessageActionRow and get first button
-        const actionRow = row as MessageActionRow;
-        if (!actionRow?.components?.length) {
-            logger.warn("[AutoBoss] No components in action row");
+        if (!button || !button.customId) {
+            logger.warn("[AutoBoss] Could not find Fight button");
+            // Log structure for debugging
+            logger.debug(`[AutoBoss] Components structure: ${JSON.stringify(response.components, null, 2).slice(0, 500)}`);
             return;
         }
 
-        const firstComp = actionRow.components[0];
-        logger.debug(`[AutoBoss] Component type: ${firstComp?.type} (${typeof firstComp?.type})`);
-
-        // Cast to button and click
-        const button = firstComp as MessageButton;
-        logger.info(`[AutoBoss] Button: label="${button.label}", customId="${button.customId}", style="${button.style}"`);
-
-        if (!button.customId) {
-            logger.warn("[AutoBoss] Button has no customId");
-            return;
-        }
-
+        logger.info(`[AutoBoss] Found button: "${button.label}" (${button.customId})`);
         await agent.client.sleep(ranInt(500, 1500));
         await response.clickButton(button.customId);
         logger.info("[AutoBoss] ✅ Clicked Fight button!");
