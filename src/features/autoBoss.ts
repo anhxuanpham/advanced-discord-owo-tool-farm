@@ -74,7 +74,17 @@ export default Schematic.registerFeature({
 
         logger.info(`[AutoBoss] Found button: "${button.label}" (${button.customId})`);
         await agent.client.sleep(ranInt(500, 1500));
-        await response.clickButton(button.customId);
-        logger.info("[AutoBoss] ✅ Clicked Fight button!");
+
+        try {
+            await response.clickButton(button.customId);
+            logger.info("[AutoBoss] ✅ Clicked Fight button!");
+        } catch (error) {
+            const msg = String(error);
+            if (msg.includes("BUTTON_CANNOT_CLICK") || msg.includes("disabled")) {
+                logger.debug("[AutoBoss] Button already clicked or disabled (boss may be defeated)");
+            } else {
+                logger.error(`[AutoBoss] Error clicking button: ${error}`);
+            }
+        }
     }
 });
