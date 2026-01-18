@@ -9,49 +9,47 @@ export default Schematic.registerFeature({
     cooldown: () => ranInt(15 * 60 * 1000, 17 * 60 * 1000), // 15-17 minutes
     condition: async () => true,
     run: async ({ agent }) => {
-        logger.info("[AutoBoss] Sending boss command...");
+        logger.info("[AutoBoss] Checking for guild boss...");
 
-        // Simple filter: just OwO messages with components (buttons)
-        const bossMsg = await agent.awaitResponse({
+        // Filter: OwO message with components
+        const response = await agent.awaitResponse({
             trigger: () => agent.send("boss"),
-            filter: (m) => {
-                if (m.author.id !== agent.owoID) return false;
-                // Match any message with buttons (components)
-                return m.components.length > 0;
-            },
-            expectResponse: true,
-            time: 10000,
+            filter: msg => msg.author.id === agent.owoID && msg.components.length > 0,
+            time: 15000
         });
 
-        if (!bossMsg) {
+        if (!response) {
             logger.debug("[AutoBoss] No boss message received");
             return;
         }
 
-        logger.info(`[AutoBoss] Got message with ${bossMsg.components.length} rows`);
+        logger.info(`[AutoBoss] Got response with ${response.components.length} component rows`);
 
-        // Click first button
-        try {
-            for (const row of bossMsg.components) {
-                if (row.type !== "ACTION_ROW") continue;
-                const actionRow = row as MessageActionRow;
+        // Log component structure for debugging
+        const row = response.components[0];
+        logger.debug(`[AutoBoss] Row type: ${row?.type} (${typeof row?.type})`);
 
-                for (const comp of actionRow.components) {
-                    if (comp.type !== "BUTTON") continue;
-                    const btn = comp as MessageButton;
-
-                    logger.info(`[AutoBoss] Clicking: "${btn.label}" (${btn.customId})`);
-
-                    if (btn.customId) {
-                        await agent.client.sleep(ranInt(500, 1500));
-                        await bossMsg.clickButton(btn.customId);
-                        logger.info("[AutoBoss] ✅ Done!");
-                        return;
-                    }
-                }
-            }
-        } catch (err) {
-            logger.error(`[AutoBoss] Error: ${err}`);
+        // Cast to MessageActionRow and get first button
+        const actionRow = row as MessageActionRow;
+        if (!actionRow?.components?.length) {
+            logger.warn("[AutoBoss] No components in action row");
+            return;
         }
+
+        const firstComp = actionRow.components[0];
+        logger.debug(`[AutoBoss] Component type: ${firstComp?.type} (${typeof firstComp?.type})`);
+
+        // Cast to button and click
+        const button = firstComp as MessageButton;
+        logger.info(`[AutoBoss] Button: label="${button.label}", customId="${button.customId}", style="${button.style}"`);
+
+        if (!button.customId) {
+            logger.warn("[AutoBoss] Button has no customId");
+            return;
+        }
+
+        await agent.client.sleep(ranInt(500, 1500));
+        await response.clickButton(button.customId);
+        logger.info("[AutoBoss] ✅ Clicked Fight button!");
     }
 });
