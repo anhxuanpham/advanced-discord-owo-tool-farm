@@ -109,26 +109,65 @@ export class FailoverCaptchaSolver implements CaptchaSolver {
      * Solve hCaptcha with failover - keeps trying until success or hard timeout
      * Hard timeout ensures we don't exceed OwO's 10-minute deadline
      */
-    /**
-     * Solve hCaptcha with failover - keeps trying until success or hard timeout
-     * Hard timeout ensures we don't exceed OwO's 10-minute deadline
-     */
-    public async solveHcaptcha(sitekey: string, siteurl: string): Promise<string> {
+    public async solveHcaptcha(sitekey: string, siteurl: string, onPanic?: () => void): Promise<string> {
         const startTime = Date.now();
-        const HARD_TIMEOUT_MS = 9 * 60 * 1000; // 9 minutes hard limit (OwO allows 10 min)
-        const RETRY_DELAY_MS = 30000; // 30 seconds between rounds
+        const PANIC_THRESHOLD_MS = 7 * 60 * 1000; // 7 minutes: Start parallel solving
+        const HARD_TIMEOUT_MS = 9 * 60 * 1000 + 50000; // 9 minutes 50 seconds: Hard limit
+        const RETRY_DELAY_MS = 30000; // 30 seconds between rounds (for sequential mode)
+        let panicTriggered = false;
 
         let lastError: Error | null = null;
         let totalAttempts = 0;
 
         while (Date.now() - startTime < HARD_TIMEOUT_MS) {
+            const elapsedTime = Date.now() - startTime;
+
+            // --- PANIC MODE: Parallel Solving ---
+            if (elapsedTime >= PANIC_THRESHOLD_MS) {
+                if (!panicTriggered) {
+                    panicTriggered = true;
+                    if (onPanic) onPanic();
+                }
+                logger.alert(`[PanicMode] Captcha taking too long (${Math.floor(elapsedTime / 1000)}s). Running ALL solvers in parallel!`);
+
+                try {
+                    // Create promises for all solvers starting at once
+                    const parallelPromises = this.solvers.map(async ({ name, solver }) => {
+                        try {
+                            const result = await solver.solveHcaptcha(sitekey, siteurl);
+                            this.recordSuccess(name);
+                            logger.info(`[PanicMode] ${name} succeeded in parallel!`);
+                            return result;
+                        } catch (err) {
+                            const error = err instanceof Error ? err : new Error(String(err));
+                            logger.warn(`[PanicMode] ${name} failed in parallel: ${error.message}`);
+                            throw error;
+                        }
+                    });
+
+                    // Wait for the first success
+                    return await Promise.any(parallelPromises);
+                } catch (error) {
+                    // AggregateError if all failed
+                    const err = error instanceof Error ? error : new Error(String(error));
+                    logger.error(`[PanicMode] All parallel solvers failed: ${err.message}`);
+                    lastError = err;
+
+                    // Small delay before trying the panic mode again if time permits
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                    continue;
+                }
+            }
+
+            // --- NORMAL MODE: Sequential Failover ---
             const startSolverIndex = this.currentIndex;
             let roundAttempts = 0;
             const maxRoundAttempts = this.solvers.length * 2; // Each round tries each solver twice
 
             while (roundAttempts < maxRoundAttempts) {
-                // Check hard timeout
-                if (Date.now() - startTime >= HARD_TIMEOUT_MS) {
+                const currentElapsed = Date.now() - startTime;
+                // Break to re-enter the outer loop if panic threshold reached or hard timeout near
+                if (currentElapsed >= PANIC_THRESHOLD_MS || currentElapsed >= HARD_TIMEOUT_MS) {
                     break;
                 }
 
@@ -137,8 +176,8 @@ export class FailoverCaptchaSolver implements CaptchaSolver {
                 totalAttempts++;
 
                 try {
-                    const elapsed = Math.floor((Date.now() - startTime) / 1000);
-                    logger.info(`[FailoverSolver] Trying ${name} for hCaptcha (attempt ${totalAttempts}, ${elapsed}s elapsed)`);
+                    const elapsedSec = Math.floor(currentElapsed / 1000);
+                    logger.info(`[FailoverSolver] Trying ${name} for hCaptcha (attempt ${totalAttempts}, ${elapsedSec}s elapsed)`);
                     const result = await solver.solveHcaptcha(sitekey, siteurl);
                     this.recordSuccess(name);
                     logger.info(`[FailoverSolver] ${name} succeeded!`);
@@ -163,9 +202,12 @@ export class FailoverCaptchaSolver implements CaptchaSolver {
 
             // All providers exhausted in this round, wait and retry if time permits
             const remainingTime = HARD_TIMEOUT_MS - (Date.now() - startTime);
-            if (remainingTime > RETRY_DELAY_MS) {
+            if (remainingTime > RETRY_DELAY_MS && remainingTime > (PANIC_THRESHOLD_MS - (Date.now() - startTime))) {
                 logger.warn(`[FailoverSolver] All providers exhausted, waiting 30s before retry (${Math.floor(remainingTime / 1000)}s remaining)`);
                 await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+            } else if (remainingTime > 5000) {
+                // Short wait if approaching panic
+                await new Promise(resolve => setTimeout(resolve, 5000));
             }
         }
 

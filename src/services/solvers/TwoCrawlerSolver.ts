@@ -128,7 +128,7 @@ export class TwoCrawlerSolver implements CaptchaSolver {
         throw new Error("[2Crawler] Image captcha solving is not supported");
     }
 
-    public async solveHcaptcha(sitekey: string, siteurl: string): Promise<string> {
+    public async solveHcaptcha(sitekey: string, siteurl: string, _onPanic?: () => void): Promise<string> {
         logger.debug(`[2Crawler] Starting hCaptcha solve for ${siteurl}`);
 
         try {

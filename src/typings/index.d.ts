@@ -28,7 +28,7 @@ export interface CaptchaSolver {
      * @param siteurl The URL of the page where the hCaptcha is present.
      * @returns A promise that resolves with the hCaptcha response token.
      */
-    solveHcaptcha(sitekey: string, siteurl: string): Promise<string>;
+    solveHcaptcha(sitekey: string, siteurl: string, onPanic?: () => void): Promise<string>;
 }
 
 export interface NotificationPayload {

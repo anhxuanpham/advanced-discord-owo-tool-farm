@@ -200,7 +200,12 @@ export class CaptchaService {
 
         // Step 4: Solve the hCaptcha
         logger.info(`[Captcha] Step 4: Solving hCaptcha with sitekey: ${sitekey}`);
-        const solution = await this.solver.solveHcaptcha(sitekey, siteurl);
+        const notificationService = new NotificationService();
+        const solution = await this.solver.solveHcaptcha(sitekey, siteurl, () => {
+            logger.alert("🚨 PANIC MODE ACTIVATED! Running all solvers in parallel.");
+            // We'll notify through console for now as it's the most reliable without passing the whole context
+            NotificationService.consoleNotify({} as any); // Simple console bell
+        });
         logger.info(`[Captcha] hCaptcha token received (length: ${solution.length})`);
 
         // Step 5: Submit the verification (matching your successful browser request exactly)
