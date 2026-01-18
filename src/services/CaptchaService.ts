@@ -234,6 +234,8 @@ export class CaptchaService {
     private static lastSolveTime = 0;
     private static captchaStartTime = 0;
     private static lastProgressNotifyTime = 0;
+    private static lastSolveProvider = "unknown";
+    private static solveDuration = 0;
 
     // Check if captcha solving is in progress (for graceful shutdown)
     public static isSolving(): boolean {
@@ -355,7 +357,16 @@ export class CaptchaService {
 
             // If we reach here, captcha was solved successfully
             agent.totalCaptchaSolved++;
-            logger.info(`Captcha solved successfully on attempt ${retries + 1}!`);
+            CaptchaService.solveDuration = Math.round((Date.now() - CaptchaService.captchaStartTime) / 1000);
+
+            // Get provider name from solver
+            if (captchaService.solver && 'getCurrentProviderName' in captchaService.solver) {
+                CaptchaService.lastSolveProvider = (captchaService.solver as any).getCurrentProviderName();
+            } else {
+                CaptchaService.lastSolveProvider = agent.config.captchaAPI || "unknown";
+            }
+
+            logger.info(`Captcha solved by ${CaptchaService.lastSolveProvider} in ${CaptchaService.solveDuration}s (attempt ${retries + 1})!`);
 
             // Add delay after solving to prevent immediate captcha respawn
             // Longer delay if this was a repeat captcha
@@ -384,6 +395,16 @@ export class CaptchaService {
                     {
                         name: "Attempt",
                         value: `${retries + 1}/${maxRetries + 1}`,
+                        inline: true
+                    },
+                    {
+                        name: "Provider",
+                        value: CaptchaService.lastSolveProvider,
+                        inline: true
+                    },
+                    {
+                        name: "Solve Time",
+                        value: `${CaptchaService.solveDuration}s`,
                         inline: true
                     }
                 ]
