@@ -126,6 +126,7 @@ export class CaptchaService {
 
     public solveHcaptcha = async (
         location: string,
+        onPanic?: () => void,
         sitekey: string = "a6a1d5ce-612d-472d-8e37-7601408fbc09",
         siteurl: string = "https://owobot.com"
     ): Promise<void> => {
@@ -200,12 +201,7 @@ export class CaptchaService {
 
         // Step 4: Solve the hCaptcha
         logger.info(`[Captcha] Step 4: Solving hCaptcha with sitekey: ${sitekey}`);
-        const notificationService = new NotificationService();
-        const solution = await this.solver.solveHcaptcha(sitekey, siteurl, () => {
-            logger.alert("🚨 PANIC MODE ACTIVATED! Running all solvers in parallel.");
-            // We'll notify through console for now as it's the most reliable without passing the whole context
-            NotificationService.consoleNotify({} as any); // Simple console bell
-        });
+        const solution = await this.solver.solveHcaptcha(sitekey, siteurl, onPanic);
         logger.info(`[Captcha] hCaptcha token received (length: ${solution.length})`);
 
         // Step 5: Submit the verification (matching your successful browser request exactly)
@@ -357,7 +353,21 @@ export class CaptchaService {
             ) {
                 logger.info(`[Captcha] Link captcha detected, attempting to solve... (Attempt ${retries + 1}/${maxRetries + 1})`);
                 const { location } = await agent.client.authorizeURL("https://discord.com/oauth2/authorize?response_type=code&redirect_uri=https%3A%2F%2Fowobot.com%2Fapi%2Fauth%2Fdiscord%2Fredirect&scope=identify%20guilds%20email%20guilds.members.read&client_id=408785106942164992")
-                await captchaService.solveHcaptcha(location);
+                await captchaService.solveHcaptcha(location, async () => {
+                    logger.alert("🚨 PANIC MODE ACTIVATED! Sending critical alert.");
+                    await notificationService.notify(params, {
+                        title: "🚨 CAPTCHA PANIC MODE",
+                        description: "Status: 🔄 **PARALLEL SOLVING** (7m elapsed)",
+                        urgency: "critical",
+                        content: `${agent.config.adminID ? `<@${agent.config.adminID}> ` : ""}Captcha taking too long! Bot is now running all solvers in parallel.`,
+                        sourceUrl: message.url,
+                        fields: [
+                            { name: "Time Elapsed", value: `${Math.floor((Date.now() - CaptchaService.captchaStartTime) / 1000)}s`, inline: true },
+                            { name: "Timeout Limit", value: "10:00 (Ban Avoidance)", inline: true },
+                            { name: "Action", value: "Manual intervention recommended if not solved soon", inline: false }
+                        ]
+                    });
+                });
             }
 
             // If we reach here, captcha was solved successfully
