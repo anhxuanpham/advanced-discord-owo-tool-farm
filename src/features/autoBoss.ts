@@ -7,9 +7,9 @@ import { ranInt } from "@/utils/math.js";
 export default Schematic.registerFeature({
     name: "autoBoss",
     cooldown: () => ranInt(15 * 60 * 1000, 17 * 60 * 1000), // 15-17 minutes
-    condition: async ({ agent: { config } }) => {
-        // Reuse autoDaily config or add separate autoBoss config if needed
-        return config.autoDaily === true;
+    condition: async () => {
+        // Always enabled - will add autoBoss config flag if needed later
+        return true;
     },
     run: async ({ agent }) => {
         logger.info("[AutoBoss] Checking for guild boss...");
@@ -18,9 +18,9 @@ export default Schematic.registerFeature({
         const bossMsg = await agent.awaitResponse({
             trigger: () => agent.send("boss"),
             filter: (m) => m.author.id === agent.owoID &&
-                (m.embeds.length > 0 && m.embeds[0].title?.includes("Guild Boss")) ||
-                m.content.includes("boss") ||
-                m.components.length > 0,
+                ((m.embeds.length > 0 && m.embeds[0].title?.includes("Guild Boss")) ||
+                    m.content.includes("boss") ||
+                    m.components.length > 0),
             expectResponse: true,
         });
 
@@ -37,10 +37,20 @@ export default Schematic.registerFeature({
                 ) as MessageActionRow | undefined;
 
                 if (actionRow) {
+                    // Log all buttons for debugging
+                    logger.debug(`[AutoBoss] Found ${actionRow.components.length} components in action row`);
+                    for (const comp of actionRow.components) {
+                        if (comp.type === "BUTTON") {
+                            const btn = comp as MessageButton;
+                            logger.debug(`[AutoBoss] Button: label="${btn.label}", customId="${btn.customId}", style="${btn.style}"`);
+                        }
+                    }
+
                     const fightButton = actionRow.components.find(
                         (c) => c.type === "BUTTON" &&
                             ((c as MessageButton).label?.toLowerCase().includes("fight") ||
-                                (c as MessageButton).customId?.toLowerCase().includes("fight"))
+                                (c as MessageButton).customId?.toLowerCase().includes("fight") ||
+                                (c as MessageButton).emoji?.name?.toLowerCase().includes("fight"))
                     ) as MessageButton | undefined;
 
                     if (fightButton && fightButton.customId) {
@@ -49,7 +59,20 @@ export default Schematic.registerFeature({
                         await bossMsg.clickButton(fightButton.customId);
                         logger.info("[AutoBoss] Clicked Fight button!");
                     } else {
-                        logger.debug("[AutoBoss] No Fight button found in message");
+                        // If no fight button by name, try first button with style PRIMARY or SUCCESS
+                        const primaryButton = actionRow.components.find(
+                            (c) => c.type === "BUTTON" &&
+                                ((c as MessageButton).style === "PRIMARY" || (c as MessageButton).style === "SUCCESS")
+                        ) as MessageButton | undefined;
+
+                        if (primaryButton && primaryButton.customId) {
+                            logger.info(`[AutoBoss] Using primary/success button: ${primaryButton.label || primaryButton.customId}`);
+                            await agent.client.sleep(ranInt(1000, 2000));
+                            await bossMsg.clickButton(primaryButton.customId);
+                            logger.info("[AutoBoss] Clicked button!");
+                        } else {
+                            logger.debug("[AutoBoss] No suitable button found in message");
+                        }
                     }
                 }
             } catch (error) {
