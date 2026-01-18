@@ -34,6 +34,22 @@ const ACTION_COMMANDS = ["hug", "pat", "kiss", "cuddle", "poke", "slap", "bite",
 let lastRerollDate = "";
 let rerollUsed = false;
 
+/**
+ * Parses a duration string like "1H 1M 8S" into milliseconds
+ */
+const parseDurationToMs = (durationStr: string): number => {
+    const hours = durationStr.match(/(\d+)H/i)?.[1];
+    const minutes = durationStr.match(/(\d+)M/i)?.[1];
+    const seconds = durationStr.match(/(\d+)S/i)?.[1];
+
+    let ms = 0;
+    if (hours) ms += parseInt(hours) * 60 * 60 * 1000;
+    if (minutes) ms += parseInt(minutes) * 60 * 1000;
+    if (seconds) ms += parseInt(seconds) * 1000;
+
+    return ms;
+};
+
 const parseQuests = (content: string): QuestInfo[] => {
     const quests: QuestInfo[] = [];
 
@@ -81,7 +97,23 @@ export default Schematic.registerFeature({
         }
 
         // Parse quest content (from message or embed)
-        const content = questMsg.embeds[0]?.description || questMsg.content;
+        const content = questMsg.embeds[0]?.description || questMsg.content || "";
+
+        // 2. Check if finished all quests
+        if (content.includes("finished all of your quests")) {
+            const timeMatch = content.match(/Next quest in:\s*([^\n<]+)/i);
+            if (timeMatch) {
+                const waitTime = parseDurationToMs(timeMatch[1]);
+                const extraBuffer = ranInt(60000, 180000); // 1-3 minutes buffer
+                const totalWait = waitTime + extraBuffer;
+
+                logger.info(`[AutoQuest] All quests finished! Next quest in ${timeMatch[1]} (Waiting ${Math.round(totalWait / 60000)}m)`);
+                return totalWait;
+            }
+            logger.info("[AutoQuest] All quests finished! Waiting for next cycle.");
+            return ranInt(60 * 60 * 1000, 2 * 60 * 60 * 1000); // 1-2 hours default wait
+        }
+
         const quests = parseQuests(content);
 
         logger.info(`[AutoQuest] Found ${quests.length} active quests`);
