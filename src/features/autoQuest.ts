@@ -23,7 +23,7 @@ const QUEST_PATTERNS = {
 };
 
 // Quests that cannot be auto-completed (need other players)
-const UNCOMPLETABLE_QUESTS = ["battlePlayer", "cookie", "pray"];
+const UNCOMPLETABLE_QUESTS = ["battlePlayer", "pray"];
 
 const GAMBLING_BET = 1000; // Bet amount for gambling quests
 
@@ -163,6 +163,15 @@ export default Schematic.registerFeature({
                     break;
 
                 case "cookie":
+                    // Send cookie to adminID
+                    if (!agent.config.adminID) {
+                        logger.warn("[AutoQuest] Cookie quest detected but no adminID configured - cannot auto-complete");
+                        break;
+                    }
+                    await agent.send(`cookie <@${agent.config.adminID}>`);
+                    logger.info(`[AutoQuest] Sent cookie to admin for quest: <@${agent.config.adminID}> (${quest.progress + 1}/${quest.target})`);
+                    break;
+
                 case "pray":
                 case "battlePlayer":
                     // These quests are auto-rerolled if detected at 0 progress
