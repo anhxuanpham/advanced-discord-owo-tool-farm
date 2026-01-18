@@ -11,58 +11,70 @@ export default Schematic.registerFeature({
     run: async ({ agent }) => {
         logger.info("[AutoBoss] Checking for guild boss...");
 
-        // Send boss command
+        // Send boss command and wait for embed message
         const bossMsg = await agent.awaitResponse({
             trigger: () => agent.send("boss"),
-            filter: (m) => m.author.id === agent.owoID,
+            filter: (m) => {
+                // Must be from OwO and have an embed
+                if (m.author.id !== agent.owoID) return false;
+                if (m.embeds.length === 0) return false;
+
+                // Log embed structure for debugging
+                const embed = m.embeds[0];
+                logger.debug(`[AutoBoss] Embed: title="${embed.title}", author="${embed.author?.name}", desc="${embed.description?.slice(0, 50)}..."`);
+
+                // Check if any embed field contains boss-related text
+                const embedText = [
+                    embed.title || "",
+                    embed.description || "",
+                    embed.author?.name || "",
+                ].join(" ").toLowerCase();
+
+                const isBossMessage = embedText.includes("guild boss") ||
+                    embedText.includes("boss appeared") ||
+                    embedText.includes("a guild boss");
+
+                return isBossMessage;
+            },
             expectResponse: true,
+            time: 15000, // Wait up to 15 seconds
         });
 
         if (!bossMsg) {
-            logger.warn("[AutoBoss] No response from OwO");
+            logger.debug("[AutoBoss] No boss available or on cooldown");
             return;
         }
 
-        // Check if this is a boss message
-        const embedTitle = bossMsg.embeds[0]?.title || "";
-        const hasBossEmbed = embedTitle.includes("Guild Boss") || embedTitle.includes("Boss");
+        logger.info(`[AutoBoss] Got boss message, components: ${bossMsg.components.length}`);
 
-        if (!hasBossEmbed) {
-            logger.debug(`[AutoBoss] Not a boss message: "${embedTitle}"`);
-            return;
-        }
-
-        logger.info(`[AutoBoss] Found boss embed: "${embedTitle}"`);
-        logger.info(`[AutoBoss] Components: ${bossMsg.components.length}`);
-
-        // Wait a moment for message to fully load
-        await agent.client.sleep(500);
-
-        // Try to click Fight button
+        // Click Fight button
         if (bossMsg.components.length === 0) {
-            logger.warn("[AutoBoss] Message has no components/buttons");
+            logger.warn("[AutoBoss] Boss message has no buttons");
             return;
         }
 
-        for (const row of bossMsg.components) {
-            if (row.type !== "ACTION_ROW") continue;
+        try {
+            for (const row of bossMsg.components) {
+                if (row.type !== "ACTION_ROW") continue;
 
-            const actionRow = row as MessageActionRow;
-            for (const comp of actionRow.components) {
-                if (comp.type !== "BUTTON") continue;
+                const actionRow = row as MessageActionRow;
+                for (const comp of actionRow.components) {
+                    if (comp.type !== "BUTTON") continue;
 
-                const btn = comp as MessageButton;
-                logger.info(`[AutoBoss] Button found: "${btn.label}" (${btn.customId})`);
+                    const btn = comp as MessageButton;
+                    logger.info(`[AutoBoss] Found button: "${btn.label}" (${btn.customId})`);
 
-                if (btn.customId) {
-                    await agent.client.sleep(ranInt(500, 1000));
-                    await bossMsg.clickButton(btn.customId);
-                    logger.info("[AutoBoss] ✅ Clicked Fight button!");
-                    return;
+                    if (btn.customId) {
+                        await agent.client.sleep(ranInt(500, 1500));
+                        await bossMsg.clickButton(btn.customId);
+                        logger.info("[AutoBoss] ✅ Clicked Fight button!");
+                        return;
+                    }
                 }
             }
+            logger.warn("[AutoBoss] No clickable button found");
+        } catch (error) {
+            logger.error(`[AutoBoss] Error: ${error}`);
         }
-
-        logger.warn("[AutoBoss] Could not find clickable button");
     }
 });
