@@ -50,15 +50,27 @@ export default Schematic.registerFeature({
     run: async ({ agent }) => {
         logger.info("[AutoBoss] Checking for guild boss...");
 
-        // Wait for message with components
+        // Wait for message with components or ticket error
         const response = await agent.awaitResponse({
             trigger: () => agent.send("boss"),
-            filter: msg => msg.author.id === agent.owoID && msg.components.length > 0,
+            filter: msg => msg.author.id === agent.owoID,
             time: 15000
         });
 
         if (!response) {
             logger.debug("[AutoBoss] No boss message received");
+            return;
+        }
+
+        if (response.content.toLowerCase().includes("ran out of boss tickets")) {
+            const timeMatch = response.content.match(/Replenishes in (.*)/i);
+            const timeInfo = timeMatch ? timeMatch[1] : "some time";
+            logger.info(`[AutoBoss] Out of boss tickets. Replenishes in: ${timeInfo}`);
+            return;
+        }
+
+        if (response.components.length === 0) {
+            logger.debug("[AutoBoss] Received message without components (and no ticket error)");
             return;
         }
 
