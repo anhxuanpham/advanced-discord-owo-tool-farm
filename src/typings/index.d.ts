@@ -39,6 +39,8 @@ export interface NotificationPayload {
     imageUrl?: string;
     content: string;
     fields?: { name: string; value: string; inline?: boolean }[];
+    footer?: { text: string; iconURL?: string };
+    timestamp?: string | number | Date;
 }
 
 export interface NotifierStrategy {

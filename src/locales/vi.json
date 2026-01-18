@@ -309,6 +309,9 @@
             "description": "Trạng thái hiện tại của công cụ",
             "status": "Trạng thái hiện tại: **{status}**\nThời gian hoạt động: **{uptime}**\nTổng số văn bản đã gửi: **{texts}**\nTổng số lệnh đã thực hiện: **{commands}**\nTổng số captcha đã giải: **{captchasSolved}**\nTổng số captcha thất bại: **{captchasFailed}**"
         },
+        "stats": {
+            "description": "Hiển thị và báo cáo thống kê farm chi tiết"
+        },
         "common": {
             "errors": {
                 "guildOnly": "❌ **Lệnh này chỉ có thể được sử dụng trong server.**",

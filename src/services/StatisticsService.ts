@@ -218,6 +218,56 @@ ${topAnimals.length > 0 ? topAnimals.map(([name, count]) => {
         `.trim();
     }
 
+    /**
+     * Generate Discord Embed payload
+     */
+    public generateEmbed(summary: Statistics) {
+        const successRate = summary.commands.total > 0
+            ? ((summary.commands.successful / summary.commands.total) * 100).toFixed(2)
+            : '0.00';
+
+        const captchaSolveRate = (summary.captchas.solved + summary.captchas.failed) > 0
+            ? ((summary.captchas.solved / (summary.captchas.solved + summary.captchas.failed)) * 100).toFixed(2)
+            : '0.00';
+
+        const topAnimals = Array.from(summary.animals.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([name, count]) => `• ${name}: **${count.toLocaleString()}**`)
+            .join('\n') || 'None';
+
+        return {
+            title: "📊 OwO Farm Statistics Report",
+            color: 0x764ba2,
+            fields: [
+                {
+                    name: "💰 Earnings",
+                    value: `• Cowoncy: **${summary.earnings.cowoncy.toLocaleString()}**\n• Gems: **${summary.earnings.gems.toLocaleString()}**\n• Lootboxes: **${summary.earnings.lootboxes.toLocaleString()}**`,
+                    inline: true
+                },
+                {
+                    name: "📊 Commands",
+                    value: `• Total: **${summary.commands.total.toLocaleString()}**\n• Success: **${summary.commands.successful.toLocaleString()}**\n• Rate: **${successRate}%**`,
+                    inline: true
+                },
+                {
+                    name: "🔐 Captchas",
+                    value: `• Solved: **${summary.captchas.solved.toLocaleString()}**\n• Failed: **${summary.captchas.failed.toLocaleString()}**\n• Rate: **${captchaSolveRate}%**\n• Avg Time: **${summary.captchas.avgSolveTime}ms**`,
+                    inline: true
+                },
+                {
+                    name: "🐾 Top Animals",
+                    value: topAnimals,
+                    inline: false
+                }
+            ],
+            footer: {
+                text: `Uptime: ${this.formatUptime(summary.uptime.totalRuntime)} | Started at ${new Date(summary.uptime.startTime).toLocaleString()}`
+            },
+            timestamp: new Date().toISOString()
+        };
+    }
+
     private generateHTMLReport(summary: Statistics): string {
         const successRate = summary.commands.total > 0
             ? ((summary.commands.successful / summary.commands.total) * 100).toFixed(1)

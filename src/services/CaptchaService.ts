@@ -373,6 +373,7 @@ export class CaptchaService {
             // If we reach here, captcha was solved successfully
             agent.totalCaptchaSolved++;
             CaptchaService.solveDuration = Math.round((Date.now() - CaptchaService.captchaStartTime) / 1000);
+            agent.stats.trackCaptcha(true, CaptchaService.solveDuration * 1000);
 
             // Get provider name from solver
             if (captchaService.solver && 'getCurrentProviderName' in captchaService.solver) {
@@ -492,47 +493,47 @@ export class CaptchaService {
                 }
 
                 await new Promise(resolve => setTimeout(resolve, delay));
-                return CaptchaService.handleCaptcha(params, message, retries + 1);
+                return await CaptchaService.handleCaptcha(params, message, retries + 1);
+            } else {
+                agent.totalCaptchaFailed++;
+                agent.stats.trackCaptcha(false);
+                CaptchaService.solvingInProgress = false;
+
+                // Max retries reached, give up - only notify on complete failure
+                logger.alert(`All ${maxRetries + 1} attempts to solve captcha failed, waiting for manual resolution.`);
+                logger.info(`WAITING FOR THE CAPTCHA TO BE RESOLVED TO ${agent.config.autoResume ? "RESTART" : "STOP"}...`);
+
+                await notificationService.notify(params, {
+                    title: "CAPTCHA DETECTED",
+                    description: `Status: ❌ **UNRESOLVED**`,
+                    urgency: "critical",
+                    content: `${agent.config.adminID ? `<@${agent.config.adminID}> ` : ""}Captcha detected in channel: <#${message.channel.id}>`,
+                    sourceUrl: message.url,
+                    imageUrl: message.attachments.first()?.url,
+                    fields: [
+                        {
+                            name: "Captcha Type",
+                            value: message.attachments.first()
+                                ? `[Image Captcha](${message.attachments.first()?.url})`
+                                : "[Link Captcha](https://owobot.com/captcha)",
+                            inline: true
+                        },
+                        {
+                            name: "Failed Attempts",
+                            value: `${maxRetries + 1}/${maxRetries + 1}`,
+                            inline: true
+                        },
+                        {
+                            name: "Last Error",
+                            value: `\`${error instanceof Error ? error.message : String(error)}\``,
+                        },
+                        {
+                            name: "Please resolve the captcha manually before",
+                            value: `<t:${Math.floor(message.createdTimestamp / 1000 + 600)}:f>`,
+                        },
+                    ]
+                });
             }
-
-            // Release lock on failure
-            CaptchaService.solvingInProgress = false;
-
-            // Max retries reached, give up - only notify on complete failure
-            logger.alert(`All ${maxRetries + 1} attempts to solve captcha failed, waiting for manual resolution.`);
-            logger.info(`WAITING FOR THE CAPTCHA TO BE RESOLVED TO ${agent.config.autoResume ? "RESTART" : "STOP"}...`);
-
-            agent.totalCaptchaFailed++;
-            await notificationService.notify(params, {
-                title: "CAPTCHA DETECTED",
-                description: `Status: ❌ **UNRESOLVED**`,
-                urgency: "critical",
-                content: `${agent.config.adminID ? `<@${agent.config.adminID}> ` : ""}Captcha detected in channel: <#${message.channel.id}>`,
-                sourceUrl: message.url,
-                imageUrl: message.attachments.first()?.url,
-                fields: [
-                    {
-                        name: "Captcha Type",
-                        value: message.attachments.first()
-                            ? `[Image Captcha](${message.attachments.first()?.url})`
-                            : "[Link Captcha](https://owobot.com/captcha)",
-                        inline: true
-                    },
-                    {
-                        name: "Failed Attempts",
-                        value: `${maxRetries + 1}/${maxRetries + 1}`,
-                        inline: true
-                    },
-                    {
-                        name: "Last Error",
-                        value: `\`${error instanceof Error ? error.message : String(error)}\``,
-                    },
-                    {
-                        name: "Please resolve the captcha manually before",
-                        value: `<t:${Math.floor(message.createdTimestamp / 1000 + 600)}:f>`,
-                    },
-                ]
-            });
         }
     }
 }

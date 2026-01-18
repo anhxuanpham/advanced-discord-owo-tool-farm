@@ -309,6 +309,9 @@
             "description": "Aracın mevcut durumu",
             "status": "Mevcut durum: **{status}**\nÇalışma süresi: **{uptime}**\nGönderilen toplam metin: **{texts}**\nYürütülen toplam komut: **{commands}**\nÇözülen toplam captcha: **{captchasSolved}**\nBaşarısız toplam captcha: **{captchasFailed}**"
         },
+        "stats": {
+            "description": "Ayrıntılı çiftlik istatistiklerini göster ve raporla"
+        },
         "common": {
             "errors": {
                 "guildOnly": "❌ **Bu komut sadece sunucuda kullanılabilir.**",

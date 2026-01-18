@@ -309,6 +309,9 @@
             "description": "Current status of the tool",
             "status": "Current status: **{status}**\nUptime: **{uptime}**\nTotal texts sent: **{texts}**\nTotal commands executed: **{commands}**\nTotal captchas solved: **{captchasSolved}**\nTotal captchas failed: **{captchasFailed}**"
         },
+        "stats": {
+            "description": "Show and report detailed farming statistics"
+        },
         "common": {
             "errors": {
                 "guildOnly": "❌ **This command can only be used in a server.**",

@@ -70,7 +70,9 @@ const upgradeTrait = async ({ agent, t }: FeatureFnParams, trait: Trait, fields:
         return;
     }
 
-    let essence = parseInt(essenceField.name.match(/Animal Essence - `([\d,]+)`/i)?.[1].replace(/,/g, "") || "0");
+    // Support both backticks and plain text for essence count
+    const essenceMatch = essenceField.name.match(/Animal Essence - (?:`|)([\d,]+)(?:`|)/i);
+    const totalEssence = parseInt(essenceMatch?.[1].replace(/,/g, "") || "0");
 
     const traitField = fields.find(f => f.name.toLowerCase().includes(trait));
 
@@ -79,27 +81,35 @@ const upgradeTrait = async ({ agent, t }: FeatureFnParams, trait: Trait, fields:
         return;
     }
 
-    const essenceMatch = traitField.value.match(/\[(\d+)\/(\d+)]/);
-    if (!essenceMatch) {
-        logger.debug(`Failed to parse essence for trait ${trait}`);
+    // Check if the trait is already MAX level (handling both MAX and [MAX])
+    if (traitField.value.includes("MAX")) {
+        logger.info(`[AutoHuntbot] Trait ${trait} is already at MAX level!`);
         return;
     }
 
-    const currentEssence = parseInt(essenceMatch[1] || "0");
-    const requiredEssence = parseInt(essenceMatch[2] || "0");
-    const missingEssence = requiredEssence - currentEssence;
+    const progressMatch = traitField.value.match(/\[(\d+)\/(\d+)]/);
+    if (!progressMatch) {
+        logger.debug(`Failed to parse essence progress for trait ${trait}. Content: ${traitField.value}`);
+        return;
+    }
+
+    const currentEssenceProgress = parseInt(progressMatch[1] || "0");
+    const requiredEssenceTotal = parseInt(progressMatch[2] || "0");
+    const missingEssence = requiredEssenceTotal - currentEssenceProgress;
+
     logger.data(t("features.autoTrait.essenceStatus", {
         trait,
-        current: currentEssence,
-        required: requiredEssence,
-        available: missingEssence
+        current: currentEssenceProgress,
+        required: requiredEssenceTotal,
+        available: totalEssence
     }));
 
-    if (missingEssence > essence) {
+    if (missingEssence > totalEssence) {
         logger.info(t("features.autoTrait.errors.notEnoughEssence"));
         return;
     } else {
         await agent.send(`upgrade ${trait} level`);
+        logger.info(`[AutoHuntbot] Upgrading trait: ${trait}`);
     }
 }
 

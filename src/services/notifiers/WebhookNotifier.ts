@@ -17,7 +17,7 @@ export class WebhookNotifier implements NotifierStrategy {
         }
 
         try {
-            const { title, description, urgency, sourceUrl, imageUrl, content, fields } = payload;
+            const { title, description, urgency, sourceUrl, imageUrl, content, fields, footer, timestamp } = payload;
             const webhook = new WebhookClient({ url: agent.config.webhookURL });
 
             const embed = new MessageEmbed()
@@ -29,11 +29,11 @@ export class WebhookNotifier implements NotifierStrategy {
                         ? "#FF0000"
                         : "#00FF00"
                 )
-                .setFooter({
+                .setFooter(footer ?? {
                     text: "Copyright William © 2022-2025",
                     iconURL: "https://i.imgur.com/EqChQK1.png",
                 })
-                .setTimestamp();
+                .setTimestamp(timestamp ? new Date(timestamp) : new Date());
 
             if (imageUrl) embed.setImage(imageUrl);
             if (fields) embed.addFields(fields);
