@@ -4,7 +4,7 @@ import { logger } from "@/utils/logger.js";
 
 export default Schematic.registerFeature({
     name: "autoStats",
-    cooldown: () => 60_000, // 1 minute for testing (can change to longer later)
+    cooldown: () => 12 * 60 * 60 * 1000, // 12 hours
     condition: async ({ agent }) => {
         // Only run if webhook is configured
         return agent.config.wayNotify.includes("webhook") && !!agent.config.webhookURL;
