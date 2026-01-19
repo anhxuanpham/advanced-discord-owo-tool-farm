@@ -111,7 +111,7 @@ export class FailoverCaptchaSolver implements CaptchaSolver {
      */
     public async solveHcaptcha(sitekey: string, siteurl: string, onPanic?: () => void): Promise<string> {
         const startTime = Date.now();
-        const PANIC_THRESHOLD_MS = 7 * 60 * 1000; // 7 minutes: Start parallel solving
+        const PANIC_THRESHOLD_MS = 8 * 60 * 1000; // 8 minutes: Start parallel solving (2 min remaining)
         const HARD_TIMEOUT_MS = 9 * 60 * 1000 + 50000; // 9 minutes 50 seconds: Hard limit
         const RETRY_DELAY_MS = 30000; // 30 seconds between rounds (for sequential mode)
         let panicTriggered = false;
