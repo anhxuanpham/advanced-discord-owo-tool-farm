@@ -27,8 +27,16 @@ export default Schematic.registerFeature({
         const inventory = invMsg.content.split("`");
         const hasLootbox = inventory.includes("050");
         const hasFabled = inventory.includes("049");
+        const hasEventBox = inventory.includes("028");
 
-        logger.debug(`[AutoLootbox] Lootbox: ${hasLootbox}, Fabled: ${hasFabled}`);
+        logger.debug(`[AutoLootbox] Lootbox: ${hasLootbox}, Fabled: ${hasFabled}, EventBox: ${hasEventBox}`);
+
+        // Open event boxes first (4M server event)
+        if (hasEventBox) {
+            logger.info("[AutoLootbox] Found event box (028)! Opening...");
+            await agent.send("use 28");
+            await agent.client.sleep(ranInt(3000, 5000));
+        }
 
         if (hasFabled && agent.config.autoFabledLootbox) {
             logger.info("[AutoLootbox] Opening fabled lootbox!");
@@ -41,7 +49,7 @@ export default Schematic.registerFeature({
             await agent.send("lb all");
         }
 
-        if (!hasLootbox && !hasFabled) {
+        if (!hasLootbox && !hasFabled && !hasEventBox) {
             logger.debug("[AutoLootbox] No lootboxes found");
         }
     }
