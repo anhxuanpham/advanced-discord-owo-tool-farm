@@ -396,7 +396,7 @@ export class CaptchaService {
             // If we reach here, captcha was solved successfully
             agent.totalCaptchaSolved++;
             CaptchaService.solveDuration = Math.round((Date.now() - CaptchaService.captchaStartTime) / 1000);
-            agent.stats.trackCaptcha(true, CaptchaService.solveDuration * 1000);
+
 
             // Get provider name from solver
             if (captchaService.solver && 'getCurrentProviderName' in captchaService.solver) {
@@ -519,7 +519,7 @@ export class CaptchaService {
                 return await CaptchaService.handleCaptcha(params, message, retries + 1);
             } else {
                 agent.totalCaptchaFailed++;
-                agent.stats.trackCaptcha(false);
+
                 CaptchaService.solvingInProgress = false;
 
                 // Max retries reached, give up - only notify on complete failure

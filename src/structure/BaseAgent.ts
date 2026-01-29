@@ -25,7 +25,7 @@ import { CooldownManager } from "./core/CooldownManager.js";
 import { fileURLToPath } from "node:url";
 import { CriticalEventHandler } from "@/handlers/CriticalEventHandler.js";
 import { SentryService } from "@/services/SentryService.js";
-import { StatisticsService } from "@/services/StatisticsService.js";
+
 
 export class BaseAgent {
     public readonly rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -40,7 +40,7 @@ export class BaseAgent {
     public commands = new Collection<string, CommandProps>();
     public cooldownManager = new CooldownManager();
     public features = new Collection<string, FeatureProps>();
-    public stats = new StatisticsService();
+
 
     public owoID = "408785106942164992"
     public prefix: string = "owo";
@@ -92,13 +92,7 @@ export class BaseAgent {
             },
         }
 
-        // Initialize statistics
-        this.stats.loadFromFile().then(() => {
-            this.stats.startAutoSave();
-        }).catch(err => {
-            logger.error("Failed to initialize statistics service:");
-            logger.error(err);
-        });
+
     }
 
     public setActiveChannel = (id?: string): GuildTextBasedChannel | undefined => {
@@ -147,7 +141,6 @@ export class BaseAgent {
         this.client.sendMessage(content, options)
         if (!!options.prefix) {
             this.totalCommands++;
-            this.stats.trackCommand(true);
         } else {
             this.totalTexts++;
         }

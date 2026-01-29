@@ -92,13 +92,8 @@ export const RATE_LIMIT = {
 } as const;
 
 /**
- * Stats and backup configurations
+ * Backup configurations
  */
-export const STATS = {
-    AUTO_SAVE_INTERVAL: 300_000, // 5 minutes
-    MAX_SOLVE_TIME_HISTORY: 100,
-} as const;
-
 export const BACKUP = {
     AUTO_INTERVAL: 86_400_000, // 24 hours
     MAX_BACKUPS: 7,
