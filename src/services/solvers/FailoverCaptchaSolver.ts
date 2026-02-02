@@ -109,13 +109,37 @@ export class FailoverCaptchaSolver implements CaptchaSolver {
      * Solve hCaptcha with failover - keeps trying until success or hard timeout
      * Hard timeout ensures we don't exceed OwO's 10-minute deadline
      */
+    /**
+     * Run a promise with a timeout
+     */
+    private async runWithTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> {
+        let timer: NodeJS.Timeout;
+        const timeoutPromise = new Promise<T>((_, reject) => {
+            timer = setTimeout(() => reject(new Error(errorMessage)), timeoutMs);
+        });
+
+        return Promise.race([
+            promise.then(result => {
+                clearTimeout(timer);
+                return result;
+            }),
+            timeoutPromise
+        ]);
+    }
+
+    /**
+     * Solve hCaptcha with failover - keeps trying until success or hard timeout
+     * Hard timeout ensures we don't exceed OwO's 10-minute deadline
+     */
     public async solveHcaptcha(sitekey: string, siteurl: string, onPanic?: () => void): Promise<string> {
         const startTime = Date.now();
-        const PANIC_THRESHOLD_MS = 8 * 60 * 1000; // 8 minutes: Start parallel solving (2 min remaining)
-        const HARD_TIMEOUT_MS = 9 * 60 * 1000 + 50000; // 9 minutes 50 seconds: Hard limit
-        const RETRY_DELAY_MS = 30000; // 30 seconds between rounds (for sequential mode)
-        let panicTriggered = false;
+        // Aggressive settings for faster failover
+        const PROVIDER_TIMEOUT_MS = 45 * 1000; // 45s per provider max
+        const PANIC_THRESHOLD_MS = 3 * 60 * 1000; // 3 minutes: Start parallel solving
+        const HARD_TIMEOUT_MS = 9 * 60 * 1000; // 9 minutes: Hard limit
+        const RETRY_DELAY_MS = 5000; // 5 seconds between rounds
 
+        let panicTriggered = false;
         let lastError: Error | null = null;
         let totalAttempts = 0;
 
@@ -134,7 +158,12 @@ export class FailoverCaptchaSolver implements CaptchaSolver {
                     // Create promises for all solvers starting at once
                     const parallelPromises = this.solvers.map(async ({ name, solver }) => {
                         try {
-                            const result = await solver.solveHcaptcha(sitekey, siteurl);
+                            // Give parallel solvers a bit more time
+                            const result = await this.runWithTimeout(
+                                solver.solveHcaptcha(sitekey, siteurl),
+                                120000,
+                                `Parallel solve timed out after 120s`
+                            );
                             this.recordSuccess(name);
                             logger.info(`[PanicMode] ${name} succeeded in parallel!`);
                             return result;
@@ -178,7 +207,14 @@ export class FailoverCaptchaSolver implements CaptchaSolver {
                 try {
                     const elapsedSec = Math.floor(currentElapsed / 1000);
                     logger.info(`[FailoverSolver] Trying ${name} for hCaptcha (attempt ${totalAttempts}, ${elapsedSec}s elapsed)`);
-                    const result = await solver.solveHcaptcha(sitekey, siteurl);
+
+                    // Enforce timeout
+                    const result = await this.runWithTimeout(
+                        solver.solveHcaptcha(sitekey, siteurl),
+                        PROVIDER_TIMEOUT_MS,
+                        `Timeout after ${PROVIDER_TIMEOUT_MS / 1000}s`
+                    );
+
                     this.recordSuccess(name);
                     logger.info(`[FailoverSolver] ${name} succeeded!`);
                     return result;
@@ -195,19 +231,18 @@ export class FailoverCaptchaSolver implements CaptchaSolver {
                         }
                     }
 
-                    // Small delay before trying next provider
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    // Small delay before trying next provider - very short to keep moving
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                 }
             }
 
             // All providers exhausted in this round, wait and retry if time permits
             const remainingTime = HARD_TIMEOUT_MS - (Date.now() - startTime);
             if (remainingTime > RETRY_DELAY_MS && remainingTime > (PANIC_THRESHOLD_MS - (Date.now() - startTime))) {
-                logger.warn(`[FailoverSolver] All providers exhausted, waiting 30s before retry (${Math.floor(remainingTime / 1000)}s remaining)`);
+                logger.warn(`[FailoverSolver] Round complete, waiting ${RETRY_DELAY_MS / 1000}s before retry...`);
                 await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
-            } else if (remainingTime > 5000) {
-                // Short wait if approaching panic
-                await new Promise(resolve => setTimeout(resolve, 5000));
+            } else if (remainingTime > 2000) {
+                await new Promise(resolve => setTimeout(resolve, 2000));
             }
         }
 
