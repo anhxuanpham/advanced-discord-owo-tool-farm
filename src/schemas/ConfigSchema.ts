@@ -22,6 +22,8 @@ export const ConfigSchema = z.object({
     prefix: z.string().optional(),
     captchaAPI: z.enum(["2captcha", "yescaptcha", "2crawler", "captchaly"]).optional(),
     apiKey: z.string().optional(),
+    imageCaptchaAPI: z.enum(["2captcha", "yescaptcha", "2crawler", "captchaly", "anticaptcha_top"]).optional(),
+    imageApiKey: z.string().optional(),
     backupCaptchaAPI: z.enum(["2captcha", "yescaptcha", "2crawler", "captchaly"]).optional(),
     backupApiKey: z.string().optional(),
     tertiaryCaptchaAPI: z.enum(["2captcha", "yescaptcha", "2crawler", "captchaly"]).optional(),

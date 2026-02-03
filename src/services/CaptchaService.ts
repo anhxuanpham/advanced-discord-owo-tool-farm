@@ -4,6 +4,7 @@ import { TwoCaptchaSolver } from "@/services/solvers/TwoCaptchaSolver.js";
 import { YesCaptchaSolver } from "@/services/solvers/YesCaptchaSolver.js";
 import { TwoCrawlerSolver } from "@/services/solvers/TwoCrawlerSolver.js";
 import { CaptchalySolver } from "@/services/solvers/CaptchalySolver.js";
+import { AntiCaptchaTopSolver } from "@/services/solvers/AntiCaptchaTopSolver.js";
 import { FailoverCaptchaSolver } from "@/services/solvers/FailoverCaptchaSolver.js";
 import { downloadAttachment } from "@/utils/download.js";
 import { logger } from "@/utils/logger.js";
@@ -19,6 +20,8 @@ import { NotificationService } from "./NotificationService.js";
 interface CaptchaServiceOptions {
     provider?: Configuration["captchaAPI"];
     apiKey?: string;
+    imageProvider?: Configuration["imageCaptchaAPI"];
+    imageApiKey?: string;
     backupProvider?: Configuration["backupCaptchaAPI"];
     backupApiKey?: string;
     tertiaryProvider?: Configuration["tertiaryCaptchaAPI"];
@@ -42,7 +45,7 @@ const getPlatformForHeader = (): string => {
     }
 };
 
-const createSingleSolver = (provider: Configuration["captchaAPI"], apiKey: string): CaptchaSolver | undefined => {
+const createSingleSolver = (provider: Configuration["captchaAPI"] | Configuration["imageCaptchaAPI"], apiKey: string): CaptchaSolver | undefined => {
     switch (provider) {
         case "yescaptcha":
             return new YesCaptchaSolver(apiKey);
@@ -52,6 +55,8 @@ const createSingleSolver = (provider: Configuration["captchaAPI"], apiKey: strin
             return new TwoCrawlerSolver(apiKey);
         case "captchaly":
             return new CaptchalySolver(apiKey);
+        case "anticaptcha_top":
+            return new AntiCaptchaTopSolver(apiKey);
         default:
             logger.error(`Unknown captcha provider: ${provider}`);
             return undefined;
@@ -107,6 +112,7 @@ const createSolver = (options: CaptchaServiceOptions): CaptchaSolver | undefined
 
 export class CaptchaService {
     private solver: CaptchaSolver | undefined;
+    private imageSolver: CaptchaSolver | undefined;
 
     private axiosInstance = wrapper(axios.create({
         jar: new CookieJar(),
@@ -123,23 +129,48 @@ export class CaptchaService {
     }))
 
     constructor(options: CaptchaServiceOptions) {
-        const { provider, apiKey } = options;
+        const { provider, apiKey, imageProvider, imageApiKey } = options;
+
+        // Initialize main solver (hCaptcha)
         if (provider && apiKey) {
             this.solver = createSolver(options);
         } else {
             logger.warn("Captcha API or API key not configured. Captcha handling will be disabled.");
         }
+
+        // Initialize dedicated image solver
+        if (imageProvider && imageApiKey) {
+            this.imageSolver = createSingleSolver(imageProvider, imageApiKey);
+            if (!this.imageSolver) {
+                logger.warn(`Image Captcha provider "${imageProvider}" not recognized or configured. Image captcha solving will be disabled.`);
+            }
+        } else {
+            // Optional: fallback to main solver OR just log warning
+            // For now, consistent with plan, we warn if not configured
+            logger.warn("Image Captcha API or API key not configured. Image captcha solving will be disabled.");
+        }
     }
 
     public solveImageCaptcha = async (attachmentUrl: string): Promise<string> => {
-        if (!this.solver) {
-            throw new Error("Captcha solver is not configured.");
+        if (!this.imageSolver) {
+            throw new Error("Image Captcha solver is not configured.");
         }
 
-        logger.debug(`Downloading captcha image from ${attachmentUrl}`);
-        const imageBuffer = await downloadAttachment(attachmentUrl);
+        // Optimization: AntiCaptchaTop supports URL directly, no need to download
+        const isUrlSupported = this.imageSolver instanceof AntiCaptchaTopSolver;
 
-        const solution = await this.solver.solveImage(imageBuffer);
+        let solution: string;
+
+        if (isUrlSupported) {
+            logger.debug(`[CaptchaService] Passing URL directly to image solver (AntiCaptchaTop)`);
+            solution = await this.imageSolver.solveImage(attachmentUrl);
+        } else {
+            logger.debug(`Downloading captcha image from ${attachmentUrl}`);
+            const imageBuffer = await downloadAttachment(attachmentUrl);
+            solution = await this.imageSolver.solveImage(imageBuffer);
+        }
+
+        // Log solution (safely handle if solution is missing/empty which shouldn't happen with updated solvers)
         logger.debug(`Captcha solution: ${solution}`);
 
         return solution;

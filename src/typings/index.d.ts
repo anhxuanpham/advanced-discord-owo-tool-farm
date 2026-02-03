@@ -16,11 +16,11 @@ export type MaybePromise<T> = T | Promise<T>;
 
 export interface CaptchaSolver {
     /**
-     * Solves an image captcha from a buffer.
-     * @param imageData The image data as a Buffer.
+     * Solves an image captcha from a buffer or URL.
+     * @param imageData The image data as a Buffer or a URL string.
      * @returns A promise that resolves with the captcha solution text.
      */
-    solveImage(imageData: Buffer): Promise<string>;
+    solveImage(imageData: Buffer | string): Promise<string>;
 
     /**
      * Solves an hCaptcha challenge.
