@@ -52,24 +52,51 @@ const parseDurationToMs = (durationStr: string): number => {
     return ms;
 };
 
-const parseQuests = (content: string): QuestInfo[] => {
-    const quests: QuestInfo[] = [];
+interface QuestMatch {
+    questNumber: number;  // The actual quest number from OwO (1, 2, etc.)
+    type: string;
+    progress: number;
+    target: number;
+}
 
-    // Parse quest content - format: "Quest X times! ... Progress: [current/target]"
-    for (const [type, pattern] of Object.entries(QUEST_PATTERNS)) {
-        const match = content.match(pattern);
-        if (match) {
-            // Progress and target are always the last two capture groups [current/target]
-            const groups = match.filter(g => g && /^\d+$/.test(g));
-            if (groups.length >= 2) {
-                quests.push({
-                    type,
-                    progress: parseInt(groups[groups.length - 2]),
-                    target: parseInt(groups[groups.length - 1]),
-                    reward: "unknown"
-                });
+const parseQuests = (content: string): QuestMatch[] => {
+    const quests: QuestMatch[] = [];
+
+    // OwO quest format: "1. Quest description!\n:blank:‣ Reward: ...\n:blank:‣ Progress: [X/Y]"
+    // We need to extract the quest NUMBER from the message, not use array index
+
+    // Split by quest numbers (1., 2., etc.)
+    const questBlocks = content.split(/(?=\d+\.\s+)/);
+
+    for (const block of questBlocks) {
+        // Extract quest number from start of block
+        const numberMatch = block.match(/^(\d+)\.\s+/);
+        if (!numberMatch) continue;
+
+        const questNumber = parseInt(numberMatch[1]);
+
+        // Extract progress [X/Y]
+        const progressMatch = block.match(/Progress:\s*\[(\d+)\/(\d+)\]/i);
+        if (!progressMatch) continue;
+
+        const progress = parseInt(progressMatch[1]);
+        const target = parseInt(progressMatch[2]);
+
+        // Determine quest type by matching patterns against the block
+        let questType = "unknown";
+        for (const [type, pattern] of Object.entries(QUEST_PATTERNS)) {
+            if (pattern.test(block)) {
+                questType = type;
+                break;
             }
         }
+
+        quests.push({
+            questNumber,
+            type: questType,
+            progress,
+            target
+        });
     }
 
     return quests;
@@ -127,22 +154,21 @@ export default Schematic.registerFeature({
             rerollUsed = false;
         }
 
-        // Check for uncompletable quests and reroll (1-indexed for OwO)
+        // Check for uncompletable quests and reroll using ACTUAL quest number from OwO
         if (!rerollUsed) {
-            for (let i = 0; i < quests.length; i++) {
-                const quest = quests[i];
+            for (const quest of quests) {
                 if (UNCOMPLETABLE_QUESTS.includes(quest.type) && quest.progress === 0) {
-                    const questNum = i + 1; // OwO uses 1-indexed
-                    logger.info(`[AutoQuest] Quest ${questNum} "${quest.type}" cannot be auto-completed, rerolling...`);
+                    // Use quest.questNumber - the actual number from OwO's message (1., 2., etc.)
+                    logger.info(`[AutoQuest] Quest #${quest.questNumber} "${quest.type}" cannot be auto-completed, rerolling...`);
 
                     await agent.awaitResponse({
-                        trigger: () => agent.send(`quest rr ${questNum}`),
+                        trigger: () => agent.send(`quest rr ${quest.questNumber}`),
                         filter: (m) => m.author.id === agent.owoID,
                         expectResponse: true,
                     });
 
                     rerollUsed = true;
-                    logger.info(`[AutoQuest] Rerolled quest ${questNum}!`);
+                    logger.info(`[AutoQuest] Rerolled quest #${quest.questNumber}!`);
 
                     // Return to re-check quests next cycle
                     return;
