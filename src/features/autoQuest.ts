@@ -15,15 +15,17 @@ const QUEST_PATTERNS = {
     huntXp: /earn.*?xp.*?hunt.*?Progress:\s*\[(\d+)\/(\d+)\]/is,
     battleXp: /earn.*?xp.*?battle.*?Progress:\s*\[(\d+)\/(\d+)\]/is,
     animals: /catch.*?(common|uncommon|rare|epic|mythical|legendary|fabled).*?Progress:\s*\[(\d+)\/(\d+)\]/is,
-    cookie: /(?:receive|give|send).*?cookie.*?Progress:\s*\[(\d+)\/(\d+)\]/is,
+    // IMPORTANT: Split cookie into send (can do) vs receive (cannot do)
+    cookieSend: /(?:give|send).*?cookie.*?Progress:\s*\[(\d+)\/(\d+)\]/is,
+    cookieReceive: /receive.*?cookie.*?friend.*?Progress:\s*\[(\d+)\/(\d+)\]/is,
     pray: /(?:receive|have).*?pray.*?to\s+you.*?Progress:\s*\[(\d+)\/(\d+)\]/is,
     action: /use\s+an?\s+action\s+command.*?(\d+)\s*times[\s\S]*?Progress:\s*\[(\d+)\/(\d+)\]/i,
     battlePlayer: /battle.*?(friend|player).*?Progress:\s*\[(\d+)\/(\d+)\]/is,
     gambling: /gamble\s+(\d+)\s+times.*?Progress:\s*\[(\d+)\/(\d+)\]/is,
 };
 
-// Quests that cannot be auto-completed (need other players)
-const UNCOMPLETABLE_QUESTS = ["battlePlayer", "pray"];
+// Quests that cannot be auto-completed (need other players to act)
+const UNCOMPLETABLE_QUESTS = ["battlePlayer", "pray", "cookieReceive"];
 
 const GAMBLING_BET = 1000; // Bet amount for gambling quests
 
@@ -162,7 +164,7 @@ export default Schematic.registerFeature({
                     logger.debug(`[AutoQuest] sayOwo: ${quest.progress}/${quest.target}`);
                     break;
 
-                case "cookie":
+                case "cookieSend":
                     // Send cookie to adminID
                     if (!agent.config.adminID) {
                         logger.warn("[AutoQuest] Cookie quest detected but no adminID configured - cannot auto-complete");
@@ -174,9 +176,10 @@ export default Schematic.registerFeature({
 
                 case "pray":
                 case "battlePlayer":
+                case "cookieReceive":
                     // These quests are auto-rerolled if detected at 0 progress
                     // If still here, means progress > 0 or already used reroll today
-                    logger.debug(`[AutoQuest] ${quest.type}: ${quest.progress}/${quest.target} - cannot auto-complete`);
+                    logger.debug(`[AutoQuest] ${quest.type}: ${quest.progress}/${quest.target} - cannot auto-complete (needs another player)`);
                     break;
 
                 case "gambling":
