@@ -57,14 +57,14 @@ jobs:
             -d '{"embeds": [{"title": "✅ Server 2 Deployed", "description": "`34.158.63.223` updated successfully", "color": 5763719}]}' \
             "$DISCORD_WEBHOOK_URL"
 
-      - name: Deploy to Server 3 (34.126.130.69)
+      - name: Deploy to Server 3 (34.124.151.52)
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          ssh William@34.126.130.69 "sudo bash -c 'cd /root/advanced-discord-owo-tool-farm && git pull origin main && docker-compose up -d --build --force-recreate && docker image prune -f'"
+          ssh William@34.124.151.52 "sudo bash -c 'cd /root/advanced-discord-owo-tool-farm && git pull origin main && docker-compose up -d --build --force-recreate && docker image prune -f'"
           
           curl -s -H "Content-Type: application/json" \
-            -d '{"embeds": [{"title": "✅ Server 3 Deployed", "description": "`34.126.130.69` updated successfully", "color": 5763719}]}' \
+            -d '{"embeds": [{"title": "✅ Server 3 Deployed", "description": "`34.124.151.52` updated successfully", "color": 5763719}]}' \
             "$DISCORD_WEBHOOK_URL"
 
       - name: Send Final Notification
@@ -76,5 +76,5 @@ jobs:
           AUTHOR=$(git log -1 --pretty=format:'%an')
           
           curl -s -H "Content-Type: application/json" \
-            -d "{\"embeds\": [{\"title\": \"🎉 Deploy Complete\", \"description\": \"All 3 servers updated successfully!\", \"color\": 5763719, \"fields\": [{\"name\": \"📝 Commit\", \"value\": \"[\`${COMMIT_SHA}\`](https://github.com/${{ github.repository }}/commit/${{ github.sha }}) ${COMMIT_MSG}\", \"inline\": false}, {\"name\": \"👤 Author\", \"value\": \"${AUTHOR}\", \"inline\": true}, {\"name\": \"🔗 Workflow\", \"value\": \"[View Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\", \"inline\": true}, {\"name\": \"📊 Servers\", \"value\": \"• 143.198.212.100\\n• 34.158.63.223\\n• 34.126.130.69\", \"inline\": false}], \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"footer\": {\"text\": \"GitHub Actions\"}}]}" \
+            -d "{\"embeds\": [{\"title\": \"🎉 Deploy Complete\", \"description\": \"All 3 servers updated successfully!\", \"color\": 5763719, \"fields\": [{\"name\": \"📝 Commit\", \"value\": \"[\`${COMMIT_SHA}\`](https://github.com/${{ github.repository }}/commit/${{ github.sha }}) ${COMMIT_MSG}\", \"inline\": false}, {\"name\": \"👤 Author\", \"value\": \"${AUTHOR}\", \"inline\": true}, {\"name\": \"🔗 Workflow\", \"value\": \"[View Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\", \"inline\": true}, {\"name\": \"📊 Servers\", \"value\": \"• 143.198.212.100\\n• 34.158.63.223\\n• 34.124.151.52\", \"inline\": false}], \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"footer\": {\"text\": \"GitHub Actions\"}}]}" \
             "$DISCORD_WEBHOOK_URL"
