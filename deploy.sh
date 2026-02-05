@@ -22,10 +22,10 @@ sudo bash -c 'cd /root/advanced-discord-owo-tool-farm && git pull origin main &&
 echo "✅ Server 2 deployed!"
 EOF
 
-# Server 3: William@34.126.130.69 (needs sudo, folder in /root/)
+# Server 3: William@34.124.151.52 (needs sudo, folder in /root/)
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "📦 Deploying to Server 3 (34.126.130.69)..."
-ssh William@34.126.130.69 << 'EOF'
+echo "📦 Deploying to Server 3 (34.124.151.52)..."
+ssh William@34.124.151.52 << 'EOF'
 sudo bash -c 'cd /root/advanced-discord-owo-tool-farm && git pull origin main && docker-compose up -d --build --force-recreate && docker image prune -f'
 echo "✅ Server 3 deployed!"
 EOF
