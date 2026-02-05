@@ -164,6 +164,9 @@ export default Schematic.registerFeature({
                     // Use quest.questNumber - the actual number from OwO's message (1., 2., etc.)
                     logger.info(`[AutoQuest] Quest #${quest.questNumber} "${quest.type}" cannot be auto-completed, rerolling...`);
 
+                    // User requested 45s cooldown
+                    await agent.client.sleep(ranInt(45000, 55000));
+
                     await agent.awaitResponse({
                         trigger: () => agent.send(`quest rr ${quest.questNumber}`),
                         filter: (m) => m.author.id === agent.owoID,
