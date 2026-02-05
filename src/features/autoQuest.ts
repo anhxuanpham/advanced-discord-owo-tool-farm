@@ -22,7 +22,7 @@ const QUEST_PATTERNS = {
     // IMPORTANT: actionReceive MUST come before action to match first!
     // Quest: "Have a friend use an action command on you X times!" - requires friend, cannot auto-complete
     actionReceive: /have\s+a\s+friend\s+use\s+an?\s+action\s+command\s+on\s+you.*?Progress:\s*\[(\d+)\/(\d+)\]/is,
-    action: /use\s+an?\s+action\s+command.*?(\d+)\s*times[\s\S]*?Progress:\s*\[(\d+)\/(\d+)\]/i,
+    action: /(?<!friend\s+)use\s+an?\s+action\s+command.*?(\d+)\s*times[\s\S]*?Progress:\s*\[(\d+)\/(\d+)\]/i,
     battlePlayer: /battle.*?(friend|player).*?Progress:\s*\[(\d+)\/(\d+)\]/is,
     gambling: /gamble\s+(\d+)\s+times.*?Progress:\s*\[(\d+)\/(\d+)\]/is,
 };
