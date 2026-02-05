@@ -20,12 +20,14 @@ const QUEST_PATTERNS = {
     cookieReceive: /receive.*?cookie.*?friend.*?Progress:\s*\[(\d+)\/(\d+)\]/is,
     pray: /(?:receive|have).*?pray.*?to\s+you.*?Progress:\s*\[(\d+)\/(\d+)\]/is,
     action: /use\s+an?\s+action\s+command.*?(\d+)\s*times[\s\S]*?Progress:\s*\[(\d+)\/(\d+)\]/i,
+    // Quest: "Have a friend use an action command on you X times!" - requires friend, cannot auto-complete
+    actionReceive: /have\s+a\s+friend\s+use\s+an?\s+action\s+command\s+on\s+you.*?Progress:\s*\[(\d+)\/(\d+)\]/is,
     battlePlayer: /battle.*?(friend|player).*?Progress:\s*\[(\d+)\/(\d+)\]/is,
     gambling: /gamble\s+(\d+)\s+times.*?Progress:\s*\[(\d+)\/(\d+)\]/is,
 };
 
 // Quests that cannot be auto-completed (need other players to act)
-const UNCOMPLETABLE_QUESTS = ["battlePlayer", "pray", "cookieReceive"];
+const UNCOMPLETABLE_QUESTS = ["battlePlayer", "pray", "cookieReceive", "actionReceive"];
 
 const GAMBLING_BET = 1000; // Bet amount for gambling quests
 
