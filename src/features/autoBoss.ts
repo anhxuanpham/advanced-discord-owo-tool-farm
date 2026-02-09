@@ -142,41 +142,87 @@ export default Schematic.registerFeature({
         logger.info(`[AutoBoss] Found button: "${button.label}" (${button.customId})`);
         await agent.client.sleep(ranInt(500, 1500));
 
-        try {
-            const interactionResponse = await response.clickButton(button.customId);
-            logger.info("[AutoBoss] ✅ Clicked Fight button!");
+        // Multi-round fight loop: keep clicking Fight buttons until boss is defeated
+        let currentMessage = response;
+        let currentButton: MessageButton | null = button;
+        let round = 1;
+        const MAX_ROUNDS = 10; // Safety limit to prevent infinite loops
 
-            // Check if the interaction response indicates no tickets (after clicking)
-            if (interactionResponse && interactionResponse instanceof Message) {
-                const irContent = interactionResponse.content || "";
-                const lowerIR = irContent.toLowerCase();
+        while (currentButton && currentButton.customId && round <= MAX_ROUNDS) {
+            try {
+                logger.info(`[AutoBoss] ⚔️ Round ${round}: Clicking Fight button...`);
+                const interactionResponse = await currentMessage.clickButton(currentButton.customId);
+                logger.info(`[AutoBoss] ✅ Round ${round}: Clicked Fight button!`);
 
-                if (lowerIR.includes("don't have any boss tickets") || lowerIR.includes("ran out of boss tickets")) {
-                    const timeMatch = irContent.match(/Replenishes in (.*?)(?:\n|$)/i) ||
-                        irContent.match(/next ticket in (.*?)(?:\n|$)/i);
-                    const timeInfo = timeMatch ? timeMatch[1].trim() : null;
+                // Check if the interaction response indicates no tickets (after clicking)
+                if (interactionResponse && interactionResponse instanceof Message) {
+                    const irContent = interactionResponse.content || "";
+                    const lowerIR = irContent.toLowerCase();
 
-                    if (timeInfo) {
-                        const cooldownMs = parseReplenishTime(timeInfo);
-                        if (cooldownMs) {
-                            const hours = Math.floor(cooldownMs / (60 * 60 * 1000));
-                            const minutes = Math.floor((cooldownMs % (60 * 60 * 1000)) / (60 * 1000));
-                            logger.info(`[AutoBoss] 🎫 Out of boss tickets (after click). Waiting ${hours}h ${minutes}m until replenish.`);
-                            return cooldownMs; // Return dynamic cooldown
+                    if (lowerIR.includes("don't have any boss tickets") || lowerIR.includes("ran out of boss tickets")) {
+                        const timeMatch = irContent.match(/Replenishes in (.*?)(?:\n|$)/i) ||
+                            irContent.match(/next ticket in (.*?)(?:\n|$)/i);
+                        const timeInfo = timeMatch ? timeMatch[1].trim() : null;
+
+                        if (timeInfo) {
+                            const cooldownMs = parseReplenishTime(timeInfo);
+                            if (cooldownMs) {
+                                const hours = Math.floor(cooldownMs / (60 * 60 * 1000));
+                                const minutes = Math.floor((cooldownMs % (60 * 60 * 1000)) / (60 * 1000));
+                                logger.info(`[AutoBoss] 🎫 Out of boss tickets (after click). Waiting ${hours}h ${minutes}m until replenish.`);
+                                return cooldownMs;
+                            }
                         }
-                    }
 
-                    logger.info(`[AutoBoss] 🎫 Out of boss tickets (after click). Replenishes in: ${timeInfo || "unknown time"}`);
-                    return 60 * 60 * 1000 + ranInt(60000, 300000);
+                        logger.info(`[AutoBoss] 🎫 Out of boss tickets (after click). Replenishes in: ${timeInfo || "unknown time"}`);
+                        return 60 * 60 * 1000 + ranInt(60000, 300000);
+                    }
                 }
+
+                // Wait a bit for the next round message to appear
+                await agent.client.sleep(ranInt(2000, 4000));
+
+                // Listen for follow-up message with a new Fight button
+                const nextMessage = await agent.awaitResponse({
+                    trigger: () => Promise.resolve(), // No trigger needed, just listening
+                    filter: msg => msg.author.id === agent.owoID && msg.components.length > 0,
+                    time: 15000,
+                    expectResponse: true
+                });
+
+                if (!nextMessage) {
+                    logger.info(`[AutoBoss] 🏆 No more fight buttons - boss defeated or battle ended after ${round} round(s)!`);
+                    break;
+                }
+
+                // Check if the next message has a Fight button
+                const nextButton = findFightButton(nextMessage.components);
+                if (!nextButton || !nextButton.customId) {
+                    logger.info(`[AutoBoss] 🏆 Boss defeated or battle ended after ${round} round(s)!`);
+                    break;
+                }
+
+                // Prepare for next round
+                currentMessage = nextMessage;
+                currentButton = nextButton;
+                round++;
+
+                // Human-like delay before clicking again
+                await agent.client.sleep(ranInt(500, 1500));
+
+            } catch (error) {
+                const msg = String(error);
+                if (msg.includes("BUTTON_CANNOT_CLICK") || msg.includes("disabled")) {
+                    logger.debug(`[AutoBoss] Button already clicked or disabled at round ${round} (boss may be defeated)`);
+                } else {
+                    logger.error(`[AutoBoss] Error clicking button at round ${round}: ${error}`);
+                }
+                break;
             }
-        } catch (error) {
-            const msg = String(error);
-            if (msg.includes("BUTTON_CANNOT_CLICK") || msg.includes("disabled")) {
-                logger.debug("[AutoBoss] Button already clicked or disabled (boss may be defeated)");
-            } else {
-                logger.error(`[AutoBoss] Error clicking button: ${error}`);
-            }
+        }
+
+        if (round > MAX_ROUNDS) {
+            logger.warn(`[AutoBoss] Reached max rounds (${MAX_ROUNDS}), stopping.`);
         }
     }
 });
