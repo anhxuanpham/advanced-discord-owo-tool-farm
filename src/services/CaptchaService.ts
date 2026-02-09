@@ -330,6 +330,8 @@ export class CaptchaService {
         const captchaService = new CaptchaService({
             provider: agent.config.captchaAPI,
             apiKey: agent.config.apiKey,
+            imageProvider: agent.config.imageCaptchaAPI,
+            imageApiKey: agent.config.imageApiKey,
             backupProvider: agent.config.backupCaptchaAPI,
             backupApiKey: agent.config.backupApiKey,
             tertiaryProvider: agent.config.tertiaryCaptchaAPI,
