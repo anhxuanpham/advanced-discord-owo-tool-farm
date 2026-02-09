@@ -406,15 +406,26 @@ export class CaptchaService {
                 const dms = await owo.createDM();
                 logger.info(`[Captcha] DM channel created, sending solution: ${solution}`);
 
+                // Listen for ANY response from OwO (not just success), so we can retry faster on wrong answers
                 const captchaResponse = await agent.awaitResponse({
                     channel: dms,
-                    filter: (msg) => msg.author.id == agent.owoID && /verified that you are.{1,3}human!/igm.test(msg.content),
+                    filter: (msg) => msg.author.id == agent.owoID,
                     trigger: async () => dms.send(solution),
                     time: 30_000
                 });
 
                 if (!captchaResponse) {
                     throw new Error("No response from OwO bot after sending captcha solution.");
+                }
+
+                // Check if OwO confirmed we're human
+                const responseText = captchaResponse.content || "";
+                if (/verified that you are.{1,3}human/i.test(responseText)) {
+                    logger.info(`[Captcha] ✅ OwO confirmed: "${responseText.slice(0, 100)}"`);
+                } else {
+                    // OwO responded but it's NOT a success message → wrong answer
+                    logger.warn(`[Captcha] ❌ Wrong answer! OwO responded: "${responseText.slice(0, 150)}"`);
+                    throw new Error(`Image captcha answer "${solution}" was incorrect. OwO said: "${responseText.slice(0, 100)}"`);
                 }
             } else if (
                 /(https?:\/\/[^\s]+)/g.test(normalizedContent)
