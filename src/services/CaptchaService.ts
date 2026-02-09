@@ -22,6 +22,8 @@ interface CaptchaServiceOptions {
     apiKey?: string;
     imageProvider?: Configuration["imageCaptchaAPI"];
     imageApiKey?: string;
+    backupImageProvider?: Configuration["backupImageCaptchaAPI"];
+    backupImageApiKey?: string;
     backupProvider?: Configuration["backupCaptchaAPI"];
     backupApiKey?: string;
     tertiaryProvider?: Configuration["tertiaryCaptchaAPI"];
@@ -129,7 +131,7 @@ export class CaptchaService {
     }))
 
     constructor(options: CaptchaServiceOptions) {
-        const { provider, apiKey, imageProvider, imageApiKey } = options;
+        const { provider, apiKey, imageProvider, imageApiKey, backupImageProvider, backupImageApiKey } = options;
 
         // Initialize main solver (hCaptcha)
         if (provider && apiKey) {
@@ -138,15 +140,28 @@ export class CaptchaService {
             logger.warn("Captcha API or API key not configured. Captcha handling will be disabled.");
         }
 
-        // Initialize dedicated image solver
+        // Initialize image solver (with optional failover)
         if (imageProvider && imageApiKey) {
-            this.imageSolver = createSingleSolver(imageProvider, imageApiKey);
-            if (!this.imageSolver) {
-                logger.warn(`Image Captcha provider "${imageProvider}" not recognized or configured. Image captcha solving will be disabled.`);
+            const primaryImageSolver = createSingleSolver(imageProvider, imageApiKey);
+            if (!primaryImageSolver) {
+                logger.warn(`Image Captcha provider "${imageProvider}" not recognized. Image captcha solving will be disabled.`);
+            } else if (backupImageProvider && backupImageApiKey) {
+                // Build image solver failover chain
+                const backupImageSolver = createSingleSolver(backupImageProvider, backupImageApiKey);
+                if (backupImageSolver) {
+                    const imageChain = [
+                        { name: imageProvider, solver: primaryImageSolver },
+                        { name: backupImageProvider, solver: backupImageSolver }
+                    ];
+                    logger.info(`[CaptchaService] Image captcha failover chain: ${imageChain.map(s => s.name).join(" → ")}`);
+                    this.imageSolver = new FailoverCaptchaSolver(imageChain);
+                } else {
+                    this.imageSolver = primaryImageSolver;
+                }
+            } else {
+                this.imageSolver = primaryImageSolver;
             }
         } else {
-            // Optional: fallback to main solver OR just log warning
-            // For now, consistent with plan, we warn if not configured
             logger.warn("Image Captcha API or API key not configured. Image captcha solving will be disabled.");
         }
     }
@@ -332,6 +347,8 @@ export class CaptchaService {
             apiKey: agent.config.apiKey,
             imageProvider: agent.config.imageCaptchaAPI,
             imageApiKey: agent.config.imageApiKey,
+            backupImageProvider: agent.config.backupImageCaptchaAPI,
+            backupImageApiKey: agent.config.backupImageApiKey,
             backupProvider: agent.config.backupCaptchaAPI,
             backupApiKey: agent.config.backupApiKey,
             tertiaryProvider: agent.config.tertiaryCaptchaAPI,
