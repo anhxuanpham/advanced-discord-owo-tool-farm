@@ -25,7 +25,20 @@ const POLLING_CONFIG = {
 } as const;
 
 // --- Helper Function ---
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const delay = (ms: number, abortSignal?: AbortSignal) => new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    if (abortSignal) {
+        if (abortSignal.aborted) {
+            clearTimeout(timer);
+            reject(new Error("Aborted"));
+            return;
+        }
+        abortSignal.addEventListener("abort", () => {
+            clearTimeout(timer);
+            reject(new Error("Aborted"));
+        }, { once: true });
+    }
+});
 
 // --- Class Implementation ---
 export class TwoCrawlerSolver implements CaptchaSolver {
@@ -69,7 +82,7 @@ export class TwoCrawlerSolver implements CaptchaSolver {
         return taskData.id;
     }
 
-    private async pollTaskResult(taskId: number): Promise<string> {
+    private async pollTaskResult(taskId: number, abortSignal?: AbortSignal): Promise<string> {
         const startTime = Date.now();
         let attempt = 0;
         let currentDelay: number = POLLING_CONFIG.INITIAL_DELAY;
@@ -77,12 +90,18 @@ export class TwoCrawlerSolver implements CaptchaSolver {
         logger.debug(`[2Crawler] Starting to poll task ${taskId}`);
 
         while (attempt < POLLING_CONFIG.MAX_ATTEMPTS) {
+            // Check abort signal before each poll
+            if (abortSignal?.aborted) {
+                logger.debug(`[2Crawler] Task ${taskId} aborted by failover controller`);
+                throw new Error(`[2Crawler] Task ${taskId} aborted`);
+            }
+
             const elapsedTime = Date.now() - startTime;
             if (elapsedTime >= POLLING_CONFIG.TIMEOUT_MS) {
                 throw new Error(`[2Crawler] Task ${taskId} timed out after ${(elapsedTime / 1000).toFixed(1)}s`);
             }
 
-            await delay(currentDelay);
+            await delay(currentDelay, abortSignal);
             attempt++;
 
             try {
@@ -128,12 +147,12 @@ export class TwoCrawlerSolver implements CaptchaSolver {
         throw new Error("[2Crawler] Image captcha solving is not supported");
     }
 
-    public async solveHcaptcha(sitekey: string, siteurl: string, _onPanic?: () => void): Promise<string> {
+    public async solveHcaptcha(sitekey: string, siteurl: string, _onPanic?: () => void, abortSignal?: AbortSignal): Promise<string> {
         logger.debug(`[2Crawler] Starting hCaptcha solve for ${siteurl}`);
 
         try {
             const taskId = await this.createTask(sitekey, siteurl);
-            const solution = await this.pollTaskResult(taskId);
+            const solution = await this.pollTaskResult(taskId, abortSignal);
 
             logger.info("[2Crawler] hCaptcha solved successfully");
             return solution;

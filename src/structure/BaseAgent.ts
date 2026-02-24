@@ -300,7 +300,6 @@ export class BaseAgent {
 
             for (const featureKey of shuffleArray(featureKeys)) {
                 if (this.captchaDetected) {
-                    logger.debug("Captcha detected, skipping feature execution.");
                     break;  // Use break instead of return to allow farmLoop to continue scheduling
                 }
 

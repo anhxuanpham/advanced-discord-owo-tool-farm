@@ -110,16 +110,25 @@ export class FailoverCaptchaSolver implements CaptchaSolver {
      * Hard timeout ensures we don't exceed OwO's 10-minute deadline
      */
     /**
-     * Run a promise with a timeout
+     * Run a solver with a timeout, aborting it when timeout is reached
      */
-    private async runWithTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> {
+    private async runWithAbort<T>(
+        fn: (abortSignal: AbortSignal) => Promise<T>,
+        timeoutMs: number,
+        errorMessage: string
+    ): Promise<T> {
+        const controller = new AbortController();
         let timer: NodeJS.Timeout;
+
         const timeoutPromise = new Promise<T>((_, reject) => {
-            timer = setTimeout(() => reject(new Error(errorMessage)), timeoutMs);
+            timer = setTimeout(() => {
+                controller.abort(); // Abort the solver
+                reject(new Error(errorMessage));
+            }, timeoutMs);
         });
 
         return Promise.race([
-            promise.then(result => {
+            fn(controller.signal).then(result => {
                 clearTimeout(timer);
                 return result;
             }),
@@ -158,9 +167,9 @@ export class FailoverCaptchaSolver implements CaptchaSolver {
                     // Create promises for all solvers starting at once
                     const parallelPromises = this.solvers.map(async ({ name, solver }) => {
                         try {
-                            // Give parallel solvers a bit more time
-                            const result = await this.runWithTimeout(
-                                solver.solveHcaptcha(sitekey, siteurl),
+                            // Give parallel solvers a bit more time, with their own abort controller
+                            const result = await this.runWithAbort(
+                                (signal) => solver.solveHcaptcha(sitekey, siteurl, undefined, signal),
                                 120000,
                                 `Parallel solve timed out after 120s`
                             );
@@ -208,9 +217,9 @@ export class FailoverCaptchaSolver implements CaptchaSolver {
                     const elapsedSec = Math.floor(currentElapsed / 1000);
                     logger.info(`[FailoverSolver] Trying ${name} for hCaptcha (attempt ${totalAttempts}, ${elapsedSec}s elapsed)`);
 
-                    // Enforce timeout
-                    const result = await this.runWithTimeout(
-                        solver.solveHcaptcha(sitekey, siteurl),
+                    // Use AbortController so we can cancel the solver on timeout
+                    const result = await this.runWithAbort(
+                        (signal) => solver.solveHcaptcha(sitekey, siteurl, undefined, signal),
                         PROVIDER_TIMEOUT_MS,
                         `Timeout after ${PROVIDER_TIMEOUT_MS / 1000}s`
                     );

@@ -45,7 +45,7 @@ export class CaptchalySolver implements CaptchaSolver {
         throw new Error("[Captchaly] Image captcha solving is not supported");
     }
 
-    public async solveHcaptcha(sitekey: string, siteurl: string, _onPanic?: () => void): Promise<string> {
+    public async solveHcaptcha(sitekey: string, siteurl: string, _onPanic?: () => void, _abortSignal?: AbortSignal): Promise<string> {
         logger.debug(`[Captchaly] Starting hCaptcha solve for ${siteurl}`);
         const startTime = Date.now();
 

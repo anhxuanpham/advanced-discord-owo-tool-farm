@@ -56,7 +56,20 @@ const POLLING_CONFIG = {
 } as const;
 
 // --- Helper Function ---
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const delay = (ms: number, abortSignal?: AbortSignal) => new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    if (abortSignal) {
+        if (abortSignal.aborted) {
+            clearTimeout(timer);
+            reject(new Error("Aborted"));
+            return;
+        }
+        abortSignal.addEventListener("abort", () => {
+            clearTimeout(timer);
+            reject(new Error("Aborted"));
+        }, { once: true });
+    }
+});
 
 // --- Class Implementation ---
 export class YesCaptchaSolver implements CaptchaSolver {
@@ -81,7 +94,7 @@ export class YesCaptchaSolver implements CaptchaSolver {
         });
     }
 
-    private async pollTaskResult(taskId: string): Promise<TaskResultResponse | null> {
+    private async pollTaskResult(taskId: string, abortSignal?: AbortSignal): Promise<TaskResultResponse | null> {
         const startTime = Date.now();
         let attempt = 0;
         let currentDelay: number = POLLING_CONFIG.INITIAL_DELAY;
@@ -89,6 +102,12 @@ export class YesCaptchaSolver implements CaptchaSolver {
         logger.debug(`[YesCaptcha] Starting to poll task ${taskId}`);
 
         while (attempt < POLLING_CONFIG.MAX_ATTEMPTS) {
+            // Check abort signal before each poll
+            if (abortSignal?.aborted) {
+                logger.debug(`[YesCaptcha] Task ${taskId} aborted by failover controller`);
+                throw new Error(`[YesCaptcha] Task ${taskId} aborted`);
+            }
+
             // Check total timeout
             const elapsedTime = Date.now() - startTime;
             if (elapsedTime >= POLLING_CONFIG.TIMEOUT_MS) {
@@ -98,7 +117,7 @@ export class YesCaptchaSolver implements CaptchaSolver {
                 );
             }
 
-            await delay(currentDelay);
+            await delay(currentDelay, abortSignal);
             attempt++;
 
             try {
@@ -201,7 +220,7 @@ export class YesCaptchaSolver implements CaptchaSolver {
         }
     }
 
-    public async solveHcaptcha(sitekey: string, siteurl: string, _onPanic?: () => void): Promise<string> {
+    public async solveHcaptcha(sitekey: string, siteurl: string, _onPanic?: () => void, abortSignal?: AbortSignal): Promise<string> {
         logger.debug(`[YesCaptcha] Starting hCaptcha solve for ${siteurl}`);
 
         let serverTimeoutRetries = 0;
@@ -221,7 +240,7 @@ export class YesCaptchaSolver implements CaptchaSolver {
 
                 logger.debug(`[YesCaptcha] Task created: ${createTaskData.taskId}`);
 
-                const resultData = await this.pollTaskResult(createTaskData.taskId);
+                const resultData = await this.pollTaskResult(createTaskData.taskId, abortSignal);
 
                 // If pollTaskResult returns null, it means YesCaptcha server timed out
                 // We should create a new task and try again
