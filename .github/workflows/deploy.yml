@@ -41,7 +41,7 @@ jobs:
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          ssh root@143.198.212.100 'cd ~/advanced-discord-owo-tool-farm && git pull origin main && DOCKER_BUILDKIT=0 docker-compose up -d --build --force-recreate && docker image prune -f'
+          ssh root@143.198.212.100 'cd ~/advanced-discord-owo-tool-farm && git pull origin main && docker system prune -af && DOCKER_BUILDKIT=0 docker-compose up -d --build --force-recreate && docker image prune -f'
           
           curl -s -H "Content-Type: application/json" \
             -d '{"embeds": [{"title": "✅ Server 1 Deployed", "description": "`143.198.212.100` updated successfully", "color": 5763719}]}' \
@@ -51,7 +51,7 @@ jobs:
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          ssh William@34.158.63.223 "sudo bash -c 'cd /root/advanced-discord-owo-tool-farm && git pull origin main && DOCKER_BUILDKIT=0 docker-compose up -d --build --force-recreate && docker image prune -f'"
+          ssh William@34.158.63.223 "sudo bash -c 'cd /root/advanced-discord-owo-tool-farm && git pull origin main && docker system prune -af && DOCKER_BUILDKIT=0 docker-compose up -d --build --force-recreate && docker image prune -f'"
           
           curl -s -H "Content-Type: application/json" \
             -d '{"embeds": [{"title": "✅ Server 2 Deployed", "description": "`34.158.63.223` updated successfully", "color": 5763719}]}' \
@@ -61,7 +61,7 @@ jobs:
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          ssh William@34.124.151.52 "sudo bash -c 'cd /root/advanced-discord-owo-tool-farm && git pull origin main && DOCKER_BUILDKIT=0 docker-compose up -d --build --force-recreate && docker image prune -f'"
+          ssh William@34.124.151.52 "sudo bash -c 'cd /root/advanced-discord-owo-tool-farm && git pull origin main && docker system prune -af && DOCKER_BUILDKIT=0 docker-compose up -d --build --force-recreate && docker image prune -f'"
           
           curl -s -H "Content-Type: application/json" \
             -d '{"embeds": [{"title": "✅ Server 3 Deployed", "description": "`34.124.151.52` updated successfully", "color": 5763719}]}' \

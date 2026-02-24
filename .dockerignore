@@ -1,0 +1,17 @@
+node_modules
+.git
+.github
+dest
+logs
+data
+*.log
+.claude
+.agent
+.gemini
+.env
+.env.*
+*.md
+!README.md
+Dockerfile
+docker-compose.yml
+.dockerignore
