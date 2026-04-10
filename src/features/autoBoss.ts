@@ -157,7 +157,8 @@ export default Schematic.registerFeature({
                 // Check if the interaction response indicates no tickets (after clicking)
                 if (interactionResponse && interactionResponse instanceof Message) {
                     const irContent = interactionResponse.content || "";
-                    const lowerIR = irContent.toLowerCase();
+                    const irEmbed = interactionResponse.embeds?.[0]?.description || "";
+                    const lowerIR = (irContent + " " + irEmbed).toLowerCase();
 
                     if (lowerIR.includes("don't have any boss tickets") || lowerIR.includes("ran out of boss tickets")) {
                         const timeMatch = irContent.match(/Replenishes in (.*?)(?:\n|$)/i) ||
@@ -177,6 +178,20 @@ export default Schematic.registerFeature({
                         logger.info(`[AutoBoss] 🎫 Out of boss tickets (after click). Replenishes in: ${timeInfo || "unknown time"}`);
                         return 60 * 60 * 1000 + ranInt(60000, 300000);
                     }
+
+                    // Handle "already fought this boss" confirmation prompt
+                    // OwO asks: "Are you sure you want to use another boss ticket?" with Fight!/Cancel buttons
+                    if (lowerIR.includes("already fought") || lowerIR.includes("use another boss ticket")) {
+                        logger.info("[AutoBoss] 🔄 Confirmation prompt detected - clicking Fight! to confirm...");
+                        const confirmButton = findFightButton(interactionResponse.components);
+                        if (confirmButton && confirmButton.customId) {
+                            await agent.client.sleep(ranInt(500, 1500));
+                            await interactionResponse.clickButton(confirmButton.customId);
+                            logger.info("[AutoBoss] ✅ Confirmed! Continuing fight...");
+                        } else {
+                            logger.warn("[AutoBoss] Could not find confirm Fight button");
+                        }
+                    }
                 }
 
                 // Wait a bit for the next round message to appear
@@ -185,7 +200,7 @@ export default Schematic.registerFeature({
                 // Listen for follow-up message with a new Fight button
                 const nextMessage = await agent.awaitResponse({
                     trigger: () => Promise.resolve(), // No trigger needed, just listening
-                    filter: msg => msg.author.id === agent.owoID && msg.components.length > 0,
+                    filter: msg => msg.author.id === agent.owoID && (msg.components.length > 0 || msg.content.toLowerCase().includes("already fought")),
                     time: 15000,
                     expectResponse: true
                 });
@@ -193,6 +208,22 @@ export default Schematic.registerFeature({
                 if (!nextMessage) {
                     logger.info(`[AutoBoss] 🏆 No more fight buttons - boss defeated or battle ended after ${round} round(s)!`);
                     break;
+                }
+
+                // Handle "already fought this boss" confirmation via regular message
+                const nextLower = (nextMessage.content + " " + (nextMessage.embeds?.[0]?.description || "")).toLowerCase();
+                if (nextLower.includes("already fought") || nextLower.includes("use another boss ticket")) {
+                    logger.info("[AutoBoss] 🔄 Confirmation prompt (message) - clicking Fight! to confirm...");
+                    const confirmBtn = findFightButton(nextMessage.components);
+                    if (confirmBtn && confirmBtn.customId) {
+                        await agent.client.sleep(ranInt(500, 1500));
+                        await nextMessage.clickButton(confirmBtn.customId);
+                        logger.info("[AutoBoss] ✅ Confirmed via message! Continuing...");
+                        // Wait for the actual fight response after confirming
+                        await agent.client.sleep(ranInt(2000, 4000));
+                        round++;
+                        continue;
+                    }
                 }
 
                 // Check if the next message has a Fight button
