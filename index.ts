@@ -55,10 +55,8 @@ process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 process.title = `Advanced Discord OwO Tool Farm v${packageJSON.version} - Copyright 2025 © Elysia x Kyou Izumi`;
-console.clear();
 
 const updateFeature = new UpdateFeature();
-const client = new ExtendedClient();
 
 const argv = await yargs(hideBin(process.argv))
     .scriptName("adotf")
@@ -113,26 +111,66 @@ if (!argv._.length) {
             process.exit(1);
         }
 
-        // Use specified account or first available
-        const accountId = argv.account || allKeys[0];
-        const config = configManager.get(accountId);
+        if (argv.account) {
+            // Single account mode
+            const config = configManager.get(argv.account);
+            if (!config) {
+                logger.error(`Account ${argv.account} not found. Available accounts: ${allKeys.join(", ")}`);
+                process.exit(1);
+            }
 
-        if (!config) {
-            logger.error(`Account ${accountId} not found. Available accounts: ${allKeys.join(", ")}`);
-            process.exit(1);
-        }
+            logger.info(`[Auto-Start] Loading account: ${config.username || argv.account}`);
+            try {
+                const client = new ExtendedClient();
+                await client.checkAccount(config.token);
+                await BaseAgent.initialize(client, config);
+            } catch (error) {
+                logger.error(`Failed to auto-start: ${error}`);
+                process.exit(1);
+            }
+        } else {
+            // Multi-account mode: run ALL saved accounts in parallel
+            logger.info(`[Auto-Start] Found ${allKeys.length} account(s), starting all in parallel...`);
 
-        logger.info(`[Auto-Start] Loading account: ${config.username || accountId}`);
+            const startAccount = async (accountId: string) => {
+                const config = configManager.get(accountId);
+                if (!config) {
+                    logger.error(`[${accountId}] Config not found, skipping.`);
+                    return;
+                }
 
-        try {
-            await client.checkAccount(config.token);
-            await BaseAgent.initialize(client, config);
-        } catch (error) {
-            logger.error(`Failed to auto-start: ${error}`);
-            process.exit(1);
+                const label = config.username || accountId;
+                logger.info(`[${label}] Logging in...`);
+
+                try {
+                    const client = new ExtendedClient();
+                    // Timeout login after 30s to avoid blocking other accounts
+                    await Promise.race([
+                        client.checkAccount(config.token),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error("Login timed out after 30s")), 30000))
+                    ]);
+                    await BaseAgent.initialize(client, config);
+                    logger.info(`[${label}] Farm loop started.`);
+                } catch (error) {
+                    logger.error(`[${label}] Failed to start: ${error}`);
+                }
+            };
+
+            // Stagger logins by 5s each to avoid rate limits
+            for (let i = 0; i < allKeys.length; i++) {
+                if (i > 0) {
+                    logger.info(`[Auto-Start] Waiting 5s before next account login...`);
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                }
+                await startAccount(allKeys[i]);
+            }
+
+            logger.info(`[Auto-Start] All ${allKeys.length} account(s) are now running.`);
         }
     } else {
         // Normal interactive mode
+        const client = new ExtendedClient();
+
         if (!argv.skipCheckUpdate) {
             const updateAvailable = await updateFeature.checkForUpdates();
             if (updateAvailable) {

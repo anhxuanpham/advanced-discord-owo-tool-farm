@@ -35,9 +35,8 @@ const GAMBLING_BET = 1000; // Bet amount for gambling quests
 // Action commands for action quests (will be sent to adminID)
 const ACTION_COMMANDS = ["hug", "pat", "kiss", "cuddle", "poke", "slap", "bite", "lick", "nom", "punch", "wave", "wink"];
 
-// Track reroll usage (1 per day)
-let lastRerollDate = "";
-let rerollUsed = false;
+// Track reroll usage per account (1 per day per account)
+const rerollState = new Map<string, { lastDate: string; used: boolean }>();
 
 /**
  * Parses a duration string like "1H 1M 8S" into milliseconds
@@ -150,15 +149,17 @@ export default Schematic.registerFeature({
 
         logger.info(`[AutoQuest] Found ${quests.length} active quests`);
 
-        // Reset reroll flag at new day
+        // Reset reroll flag at new day (per account)
         const today = new Date().toDateString();
-        if (lastRerollDate !== today) {
-            lastRerollDate = today;
-            rerollUsed = false;
+        const accountId = agent.client.user?.id || "unknown";
+        let accountReroll = rerollState.get(accountId);
+        if (!accountReroll || accountReroll.lastDate !== today) {
+            accountReroll = { lastDate: today, used: false };
+            rerollState.set(accountId, accountReroll);
         }
 
         // Check for uncompletable quests and reroll using ACTUAL quest number from OwO
-        if (!rerollUsed) {
+        if (!accountReroll.used) {
             for (const quest of quests) {
                 if (UNCOMPLETABLE_QUESTS.includes(quest.type) && quest.progress === 0) {
                     // Use quest.questNumber - the actual number from OwO's message (1., 2., etc.)
@@ -173,7 +174,7 @@ export default Schematic.registerFeature({
                         expectResponse: true,
                     });
 
-                    rerollUsed = true;
+                    rerollState.set(accountId, { lastDate: today, used: true });
                     logger.info(`[AutoQuest] Rerolled quest #${quest.questNumber}!`);
 
                     // Return to re-check quests next cycle

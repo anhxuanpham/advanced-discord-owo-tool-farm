@@ -4,6 +4,7 @@ pnpm-lock.yaml
 
 dest
 logs
+data
 assets/music.mp3
 config.json
 

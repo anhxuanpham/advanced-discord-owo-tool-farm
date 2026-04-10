@@ -4,7 +4,13 @@ import { t } from "@/utils/locales.js";
 import { logger } from "@/utils/logger.js";
 
 export class CriticalEventHandler {
+    private static initialized = false;
+
     public static handleRejection(params: FeatureFnParams) {
+        // Only register global process handlers once (multi-account safe)
+        if (CriticalEventHandler.initialized) return;
+        CriticalEventHandler.initialized = true;
+
         process.on("unhandledRejection", (reason, promise) => {
             logger.runtime("Unhandled Rejection at:");
             logger.runtime(`Promise: ${promise}`);
@@ -14,36 +20,27 @@ export class CriticalEventHandler {
         process.on("uncaughtException", (error) => {
             logger.error("Uncaught Exception:");
             logger.error(error)
-            // Optionally, you can notify the user or log to a file
-            // consoleNotify("Uncaught Exception", `Error: ${error.message}\nStack: ${error.stack}`);
         });
 
-        process.on("SIGINT", () => {
-            logger.info(t("events.sigint"));
-            NotificationService.consoleNotify(params);
-            // Optionally, you can notify the user or log to a file
-            // consoleNotify("Stopping Selfbot", "Received SIGINT. Stopping selfbot...");
-            process.exit(0);
-        });
-
-        process.on("SIGTERM", () => {
-            logger.info(t("events.sigterm"));
-            NotificationService.consoleNotify(params);
-
-            process.exit(0);
-        });
+        // SIGINT/SIGTERM are handled by graceful shutdown in index.ts
+        // Do NOT register them here to avoid bypassing captcha-aware shutdown
     }
 
-    public static handleBan({ t }: FeatureFnParams) {
-        logger.alert(`${t("status.states.banned")}, ${t("status.states.stop")}`);
-        // consoleNotify(...)
-        process.exit(-1);
+    public static handleBan(params: FeatureFnParams) {
+        const { agent, t } = params;
+        const label = agent.config.username || agent.client.user?.id || "unknown";
+        logger.alert(`[${label}] ${t("status.states.banned")}, ${t("status.states.stop")}`);
+        // Stop only this account's farm loop, not the entire process
+        agent.farmLoopPaused = true;
+        agent.client.destroy();
+        NotificationService.consoleNotify(params);
     }
 
     public static async handleNoMoney(params: FeatureFnParams) {
         const { agent, t } = params;
+        const label = agent.config.username || agent.client.user?.id || "unknown";
         if (agent.config.autoSell) {
-            logger.warn(t("handlers.criticalEvent.noMoney.attemptingSell"));
+            logger.warn(`[${label}] ${t("handlers.criticalEvent.noMoney.attemptingSell")}`);
 
             const sellResponse = await agent.awaitResponse({
                 trigger: () => agent.send("sell all"),
@@ -52,21 +49,23 @@ export class CriticalEventHandler {
             })
 
             if (!sellResponse) {
-                logger.error("Failed to sell items. No response received.");
+                logger.error(`[${label}] Failed to sell items. No response received.`);
                 return;
             }
 
             if (/sold.*for a total of/.test(sellResponse.content)) {
                 logger.data(sellResponse.content.replace(/<a?:(\w+):\d+>/g, '$1').replace("**", "")); // Replace emojis with their names
             } else {
-                logger.warn(t("handlers.criticalEvent.noMoney.noItems"));
+                logger.warn(`[${label}] ${t("handlers.criticalEvent.noMoney.noItems")}`);
                 NotificationService.consoleNotify(params);
-                process.exit(-1);
+                // Stop only this account's farm loop, not the entire process
+                agent.farmLoopPaused = true;
             }
         } else {
-            logger.warn(t("handlers.criticalEvent.noMoney.autoSellDisabled"));
+            logger.warn(`[${label}] ${t("handlers.criticalEvent.noMoney.autoSellDisabled")}`);
             NotificationService.consoleNotify(params);
-            process.exit(-1);
+            // Stop only this account's farm loop, not the entire process
+            agent.farmLoopPaused = true;
         }
     }
 }

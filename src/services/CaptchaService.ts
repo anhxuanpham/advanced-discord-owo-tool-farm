@@ -297,50 +297,35 @@ export class CaptchaService {
         logger.info("✅ hCaptcha verification successful!");
     }
 
-    // Singleton lock to prevent parallel captcha solve attempts (prevents YesCaptcha rate limiting)
-    private static solvingInProgress = false;
-    private static lastSolveTime = 0;
+    // Per-account tracking for captcha solving
+    private static solvingAccounts = new Set<string>();
+    private static lastSolveTimeByAccount = new Map<string, number>();
     private static captchaStartTime = 0;
     private static lastProgressNotifyTime = 0;
     private static lastSolveProvider = "unknown";
     private static solveDuration = 0;
 
-    // Check if captcha solving is in progress (for graceful shutdown)
+    // Check if any captcha solving is in progress (for graceful shutdown)
     public static isSolving(): boolean {
-        return CaptchaService.solvingInProgress;
+        return CaptchaService.solvingAccounts.size > 0;
     }
 
     public static async handleCaptcha(params: BaseParams, message: Message, retries: number = 0): Promise<void> {
         const { agent } = params;
+        const accountId = agent.client.user?.id || "unknown";
         const normalizedContent = message.content.normalize("NFC").replace(NORMALIZE_REGEX, "");
         const maxRetries = CAPTCHA.MAX_RETRIES;
 
-        // Check if another instance already solved recently (within 10 seconds)
-        if (Date.now() - CaptchaService.lastSolveTime < 10000) {
-            logger.debug('Captcha was recently solved, skipping this attempt...');
-            // Reset captchaDetected since the captcha was already handled
+        // Check if THIS account already solved recently (within 10 seconds)
+        const lastSolveTime = CaptchaService.lastSolveTimeByAccount.get(accountId) || 0;
+        if (Date.now() - lastSolveTime < 10000) {
+            logger.debug(`[${accountId}] Captcha was recently solved, skipping...`);
             agent.captchaDetected = false;
             return;
         }
 
-        // Wait if another solve is in progress (max 60 seconds to stay within 10min timeout)
-        if (CaptchaService.solvingInProgress && retries === 0) {
-            logger.debug('Captcha solving already in progress, waiting...');
-            let waitCount = 0;
-            while (CaptchaService.solvingInProgress && waitCount < 60) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                waitCount++;
-            }
-            if (Date.now() - CaptchaService.lastSolveTime < 10000) {
-                logger.debug('Captcha was solved while waiting, skipping...');
-                // Reset captchaDetected since the captcha was already handled
-                agent.captchaDetected = false;
-                return;
-            }
-        }
-
-        // Set lock
-        CaptchaService.solvingInProgress = true;
+        // Mark this account as solving
+        CaptchaService.solvingAccounts.add(accountId);
 
         const captchaService = new CaptchaService({
             provider: agent.config.captchaAPI,
@@ -363,8 +348,8 @@ export class CaptchaService {
         }
 
         // Check if this is a repeat captcha (within 5 minutes of last solve)
-        const timeSinceLastSolve = Date.now() - CaptchaService.lastSolveTime;
-        const isRepeatCaptcha = CaptchaService.lastSolveTime > 0 && timeSinceLastSolve < CAPTCHA.REPEAT_THRESHOLD;
+        const timeSinceLastSolve = Date.now() - lastSolveTime;
+        const isRepeatCaptcha = lastSolveTime > 0 && timeSinceLastSolve < CAPTCHA.REPEAT_THRESHOLD;
 
         // Only notify on first attempt
         if (retries === 0) {
@@ -511,8 +496,8 @@ export class CaptchaService {
             });
 
             // Mark solving complete and record time
-            CaptchaService.solvingInProgress = false;
-            CaptchaService.lastSolveTime = Date.now();
+            CaptchaService.solvingAccounts.delete(accountId);
+            CaptchaService.lastSolveTimeByAccount.set(accountId, Date.now());
 
             // Reset captcha flag and resume farming AFTER the delay
             agent.captchaDetected = false;
@@ -581,7 +566,7 @@ export class CaptchaService {
             } else {
                 agent.totalCaptchaFailed++;
 
-                CaptchaService.solvingInProgress = false;
+                CaptchaService.solvingAccounts.delete(accountId);
 
                 // Max retries reached, give up - only notify on complete failure
                 logger.alert(`All ${maxRetries + 1} attempts to solve captcha failed, waiting for manual resolution.`);
